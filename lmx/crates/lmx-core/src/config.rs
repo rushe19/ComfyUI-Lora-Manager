@@ -63,6 +63,12 @@ pub struct Config {
     /// Host used for "open on Civitai" links (e.g. civitai.red for mature content).
     #[serde(default = "default_civitai_host")]
     pub civitai_host: String,
+    /// Civitai API key (falls back to LoRA Manager's `civitai_api_key` when `lm_settings` is set).
+    #[serde(default, skip_serializing)]
+    pub civitai_api_key: Option<String>,
+    /// Parallel model downloads.
+    #[serde(default = "default_download_concurrency")]
+    pub download_concurrency: usize,
     /// Directory holding lmx.toml, index.sqlite and caches. Not serialized.
     #[serde(skip)]
     pub data_dir: PathBuf,
@@ -76,6 +82,10 @@ fn default_civitai_host() -> String {
     "civitai.com".into()
 }
 
+fn default_download_concurrency() -> usize {
+    2
+}
+
 impl Default for Config {
     fn default() -> Self {
         Config {
@@ -83,6 +93,8 @@ impl Default for Config {
             lm_settings: None,
             scan_threads: default_scan_threads(),
             civitai_host: default_civitai_host(),
+            civitai_api_key: None,
+            download_concurrency: default_download_concurrency(),
             data_dir: PathBuf::from("data"),
         }
     }
@@ -100,14 +112,41 @@ impl Config {
         cfg.data_dir = data_dir.to_path_buf();
         if let Some(lm) = cfg.lm_settings.clone() {
             let lm = if lm.is_relative() { data_dir.join(lm) } else { lm };
-            let imported = roots_from_lm_settings(&std::fs::read_to_string(&lm)?)?;
+            let text = std::fs::read_to_string(&lm)?;
+            let imported = roots_from_lm_settings(&text)?;
             for t in ModelType::ALL {
                 for p in imported.get(t) {
                     cfg.roots.push_unique(t, p.clone());
                 }
             }
+            if cfg.civitai_api_key.as_deref().is_none_or(|k| k.trim().is_empty()) {
+                cfg.civitai_api_key = serde_json::from_str::<serde_json::Value>(&text)
+                    .ok()
+                    .and_then(|v| v.get("civitai_api_key").and_then(|k| k.as_str()).map(str::to_string))
+                    .filter(|k| !k.trim().is_empty());
+            }
         }
         Ok(cfg)
+    }
+
+    /// Root folders for a model type, plus whether `dir` is inside one of them (no `..` escapes).
+    pub fn download_dir(&self, t: ModelType, root: Option<&str>, folder: &str) -> anyhow::Result<PathBuf> {
+        let roots = self.roots.get(t);
+        anyhow::ensure!(!roots.is_empty(), "no {} root configured", t.as_str());
+        let base = match root {
+            Some(r) => roots
+                .iter()
+                .find(|p| crate::paths::norm(p).eq_ignore_ascii_case(&r.replace('\\', "/").trim_end_matches('/').to_string()))
+                .ok_or_else(|| anyhow::anyhow!("unknown root: {r}"))?
+                .clone(),
+            None => roots[0].clone(),
+        };
+        let mut dir = base;
+        for part in folder.replace('\\', "/").split('/').filter(|p| !p.is_empty()) {
+            anyhow::ensure!(part != "." && part != ".." && !part.contains(':'), "invalid folder: {folder}");
+            dir.push(part);
+        }
+        Ok(dir)
     }
 
     pub fn index_path(&self) -> PathBuf {
@@ -171,6 +210,31 @@ mod tests {
         let cfg = Config::load(&dir).unwrap();
         assert_eq!(cfg.scan_threads, 4);
         assert_eq!(cfg.roots.lora.len(), 2, "{:?}", cfg.roots.lora);
+    }
+
+    #[test]
+    fn download_dir_stays_inside_configured_roots() {
+        let cfg = Config {
+            roots: Roots { lora: vec![PathBuf::from("H:/m/Lora"), PathBuf::from("D:/extra")], ..Default::default() },
+            ..Default::default()
+        };
+        assert_eq!(crate::paths::norm(&cfg.download_dir(ModelType::Lora, None, "Character/New").unwrap()), "H:/m/Lora/Character/New");
+        assert_eq!(crate::paths::norm(&cfg.download_dir(ModelType::Lora, Some("D:\\extra\\"), "").unwrap()), "D:/extra");
+        assert!(cfg.download_dir(ModelType::Lora, None, "../escape").is_err());
+        assert!(cfg.download_dir(ModelType::Lora, None, "C:/Windows").is_err());
+        assert!(cfg.download_dir(ModelType::Lora, Some("X:/unknown"), "").is_err());
+        assert!(cfg.download_dir(ModelType::Checkpoint, None, "").is_err());
+    }
+
+    #[test]
+    fn api_key_is_imported_from_lm_settings_and_never_serialized() {
+        let dir = std::env::temp_dir().join(format!("lmx-cfg-key-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("lm.json"), r#"{"civitai_api_key":"secret123","folder_paths":{}}"#).unwrap();
+        std::fs::write(dir.join("lmx.toml"), "lm_settings = \"lm.json\"\n").unwrap();
+        let cfg = Config::load(&dir).unwrap();
+        assert_eq!(cfg.civitai_api_key.as_deref(), Some("secret123"));
+        assert!(!serde_json::to_string(&cfg).unwrap().contains("secret123"));
     }
 
     #[test]

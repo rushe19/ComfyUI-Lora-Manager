@@ -49,6 +49,20 @@ pub fn is_video(path: &str) -> bool {
     l.ends_with(".mp4") || l.ends_with(".webm")
 }
 
+/// Make a remote file name safe for Windows: no separators/reserved characters, no trailing dots.
+pub fn sanitize_file_name(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| if c.is_control() || matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') { '_' } else { c })
+        .collect();
+    let trimmed = cleaned.trim().trim_end_matches(['.', ' ']);
+    if trimmed.is_empty() || trimmed.chars().all(|c| c == '.') {
+        "download.bin".into()
+    } else {
+        trimmed.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -64,6 +78,14 @@ mod tests {
         let root = Path::new("H:/m/Lora");
         assert_eq!(relative_folder(root, Path::new("H:/m/Lora/x.safetensors")), "");
         assert_eq!(relative_folder(root, Path::new("H:/m/Lora/Char/Sub/x.safetensors")), "Char/Sub");
+    }
+
+    #[test]
+    fn sanitize_removes_reserved_characters() {
+        assert_eq!(sanitize_file_name("a/b\\c:d*e?.safetensors"), "a_b_c_d_e_.safetensors");
+        assert_eq!(sanitize_file_name("..\\..\\evil.safetensors"), ".._.._evil.safetensors");
+        assert_eq!(sanitize_file_name(" name. "), "name");
+        assert_eq!(sanitize_file_name(".."), "download.bin");
     }
 
     #[test]

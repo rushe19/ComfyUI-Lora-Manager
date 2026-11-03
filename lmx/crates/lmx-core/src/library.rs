@@ -60,6 +60,8 @@ struct Entry {
 pub struct Library {
     entries: Vec<Entry>,
     by_id: HashMap<i64, usize>,
+    by_sha: HashMap<String, i64>,
+    by_version: HashMap<i64, i64>,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -85,7 +87,19 @@ impl Library {
             .collect();
         entries.sort_by(|a, b| a.name_lower.cmp(&b.name_lower).then_with(|| a.rec.file_path.cmp(&b.rec.file_path)));
         let by_id = entries.iter().enumerate().map(|(i, e)| (e.rec.id, i)).collect();
-        Library { entries, by_id }
+        let by_sha = entries.iter().filter_map(|e| e.rec.sha256.clone().map(|s| (s, e.rec.id))).collect();
+        let by_version = entries.iter().filter_map(|e| e.rec.civitai_version_id.map(|v| (v, e.rec.id))).collect();
+        Library { entries, by_id, by_sha, by_version }
+    }
+
+    /// lowercase sha256 -> model id
+    pub fn sha_index(&self) -> &HashMap<String, i64> {
+        &self.by_sha
+    }
+
+    /// civitai version id -> model id
+    pub fn version_index(&self) -> &HashMap<i64, i64> {
+        &self.by_version
     }
 
     pub fn len(&self) -> usize {

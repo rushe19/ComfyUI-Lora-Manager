@@ -20,11 +20,15 @@ pub struct AppState {
     pub cfg: Config,
     pub library: RwLock<Arc<Library>>,
     pub scanning: AtomicBool,
+    /// A scan was requested while one was running; run again when it finishes.
+    pub rescan_pending: AtomicBool,
     pub progress: Arc<Progress>,
     pub last_scan: Mutex<Option<LastScan>>,
     pub thumbs_dir: PathBuf,
     /// Limits concurrent thumbnail generation.
     pub thumb_permits: tokio::sync::Semaphore,
+    pub civitai: lmx_civitai::CivitaiClient,
+    pub downloads: crate::downloads::Downloads,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -41,15 +45,27 @@ impl AppState {
         let records: Vec<_> = store.load()?.into_values().collect();
         let thumbs_dir = cfg.data_dir.join("thumbs");
         std::fs::create_dir_all(&thumbs_dir)?;
+        let civitai = lmx_civitai::CivitaiClient::new(&cfg.civitai_host, cfg.civitai_api_key.clone())?;
+        let downloads = crate::downloads::Downloads::open(&cfg.data_dir.join("downloads.sqlite"))?;
         Ok(Arc::new(AppState {
             library: RwLock::new(Arc::new(Library::new(records))),
             cfg,
             scanning: AtomicBool::new(false),
+            rescan_pending: AtomicBool::new(false),
             progress: Arc::new(Progress::default()),
             last_scan: Mutex::new(None),
             thumbs_dir,
             thumb_permits: tokio::sync::Semaphore::new(4),
+            civitai,
+            downloads,
         }))
+    }
+
+    /// Scan now, or right after the running scan finishes.
+    pub fn request_scan(self: &Arc<Self>) {
+        if !self.spawn_scan() {
+            self.rescan_pending.store(true, Ordering::SeqCst);
+        }
     }
 
     pub fn library(&self) -> Arc<Library> {
@@ -79,6 +95,9 @@ impl AppState {
             let finished_at = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0);
             *state.last_scan.lock().expect("last_scan lock") = Some(LastScan { finished_at, stats, error });
             state.scanning.store(false, Ordering::SeqCst);
+            if state.rescan_pending.swap(false, Ordering::SeqCst) {
+                state.spawn_scan();
+            }
         });
         true
     }

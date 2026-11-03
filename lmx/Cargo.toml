@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/lmx-core", "crates/lmx-server", "crates/lmx-scan"]
+members = ["crates/lmx-core", "crates/lmx-civitai", "crates/lmx-server", "crates/lmx-scan"]
 
 [workspace.package]
 version = "0.0.1"
@@ -11,8 +11,8 @@ repository = "https://github.com/rushe19/ComfyUI-Lora-Manager"
 [workspace.dependencies]
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "fs", "io-util", "sync", "time"] }
 
 [profile.release]
 lto = "thin"

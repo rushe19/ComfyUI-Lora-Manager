@@ -1,6 +1,8 @@
 //! lmx HTTP server: REST API over the in-memory library, previews/thumbnails, static PWA shell.
 
 pub mod api;
+pub mod civitai_api;
+pub mod downloads;
 pub mod preview;
 pub mod state;
 
@@ -8,7 +10,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use axum::{
     http::{header, HeaderValue, StatusCode},
-    routing::{get, post},
+    routing::{delete, get, post},
     Json, Router,
 };
 use tower_http::{
@@ -39,6 +41,13 @@ pub fn app(state: Arc<AppState>, web_dir: PathBuf) -> Router {
         .route("/folders", get(api::folders))
         .route("/facets", get(api::facets))
         .route("/preview/{id}", get(preview::preview))
+        .route("/civitai/search", get(civitai_api::search))
+        .route("/civitai/models/{id}", get(civitai_api::model))
+        .route("/download-targets", get(civitai_api::targets))
+        .route("/downloads", get(civitai_api::list).post(civitai_api::enqueue))
+        .route("/downloads/urls", post(civitai_api::enqueue_urls))
+        .route("/downloads/{id}", delete(civitai_api::cancel))
+        .route("/downloads/{id}/retry", post(civitai_api::retry))
         .fallback(|| async { (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "not found"}))) })
         .with_state(state);
 

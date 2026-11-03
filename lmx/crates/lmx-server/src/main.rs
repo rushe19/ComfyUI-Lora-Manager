@@ -29,6 +29,10 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("lmx listening on http://{addr} (web: {}, data: {})", web_dir.display(), data_dir.display());
     // Serve right away from the stored index; refresh it in the background.
     state.spawn_scan();
+    lmx_server::downloads::spawn_worker(state.clone());
+    if !state.civitai.has_key() {
+        tracing::warn!("no Civitai API key: set civitai_api_key in lmx.toml (or lm_settings) for favorites and gated downloads");
+    }
     axum::serve(listener, app(state, web_dir)).await?;
     Ok(())
 }

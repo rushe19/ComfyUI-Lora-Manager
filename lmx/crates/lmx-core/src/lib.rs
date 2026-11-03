@@ -1,6 +1,7 @@
 //! lmx core: configuration, sidecar I/O, library scanning, persistent index and queries.
 
 pub mod config;
+pub mod downloads;
 pub mod library;
 pub mod model_type;
 pub mod paths;

@@ -10,6 +10,8 @@ serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 lmx-core = { path = "../lmx-core" }
+lmx-civitai = { path = "../lmx-civitai" }
+futures-util = "0.3"
 axum = "0.8"
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["fs", "compression-gzip", "set-header"] }

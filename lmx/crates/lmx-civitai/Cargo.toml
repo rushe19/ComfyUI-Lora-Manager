@@ -1,0 +1,17 @@
+[package]
+name = "lmx-civitai"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+lmx-core = { path = "../lmx-core" }
+reqwest = { version = "0.13", default-features = false, features = ["native-tls", "json", "stream", "gzip", "http2", "charset"] }
+regex = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["test-util", "macros", "rt-multi-thread"] }
