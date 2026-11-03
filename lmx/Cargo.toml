@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = ["crates/lmx-server", "crates/lmx-scan"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+license = "GPL-3.0-only"
+repository = "https://github.com/rushe19/ComfyUI-Lora-Manager"
+
+[workspace.dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

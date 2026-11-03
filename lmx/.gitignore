@@ -1,0 +1,7 @@
+target/
+web/node_modules/
+web/dist/
+data/
+*.log
+# Real user sidecars copied for local fixture tests: never commit (personal library data).
+tests/fixtures/sidecars-local/
