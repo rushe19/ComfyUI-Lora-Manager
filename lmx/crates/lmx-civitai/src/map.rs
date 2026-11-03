@@ -198,7 +198,67 @@ pub fn find_version(model: &Value, version_id: i64) -> Option<&Value> {
     versions(model).iter().find(|v| v.get("id").and_then(Value::as_i64) == Some(version_id))
 }
 
-/// Merge model-level fields into a `/model-versions/{id}` payload the way LoRA Manager stores it.
+/// LoRA Manager `resolve_license_payload`: license fields with documented defaults
+/// (allowNoCredit/allowDerivatives/allowDifferentLicense true, allowCommercialUse ["Sell"]).
+pub fn resolve_license_payload(model: &Value) -> Map<String, Value> {
+    let as_bool = |k: &str| match model.get(k) {
+        None | Some(Value::Null) => true,
+        Some(Value::Bool(b)) => *b,
+        Some(Value::Number(n)) => n.as_f64().is_some_and(|f| f != 0.0),
+        Some(Value::String(s)) => !s.is_empty(),
+        Some(Value::Array(a)) => !a.is_empty(),
+        Some(Value::Object(o)) => !o.is_empty(),
+    };
+    let split = |s: &str| -> Vec<Value> {
+        let t = s.trim();
+        if !(t.contains(',') || (t.starts_with('{') && t.ends_with('}'))) {
+            return vec![Value::String(s.to_string())];
+        }
+        let inner = t.strip_prefix('{').and_then(|x| x.strip_suffix('}')).unwrap_or(t);
+        let parts: Vec<Value> = inner.split(',').map(str::trim).filter(|p| !p.is_empty()).map(|p| Value::String(p.into())).collect();
+        if parts.is_empty() {
+            vec![Value::String(s.to_string())]
+        } else {
+            parts
+        }
+    };
+    let commercial: Vec<Value> = match model.get("allowCommercialUse") {
+        None | Some(Value::Null) => vec![json!("Sell")],
+        Some(Value::String(s)) => split(s),
+        Some(Value::Array(a)) => {
+            let mut out = Vec::new();
+            for v in a {
+                match v {
+                    Value::Null => {}
+                    Value::String(s) => out.extend(split(s)),
+                    other => out.push(Value::String(other.to_string())),
+                }
+            }
+            out
+        }
+        Some(_) => vec![json!("Sell")],
+    };
+    let mut m = Map::new();
+    m.insert("allowNoCredit".into(), json!(as_bool("allowNoCredit")));
+    m.insert("allowCommercialUse".into(), Value::Array(commercial));
+    m.insert("allowDerivatives".into(), json!(as_bool("allowDerivatives")));
+    m.insert("allowDifferentLicense".into(), json!(as_bool("allowDifferentLicense")));
+    m
+}
+
+/// Drop ComfyUI workflow blobs from example image meta (LoRA Manager `_remove_comfy_metadata`).
+pub fn strip_comfy(civ: &mut Map<String, Value>) {
+    if let Some(Value::Array(images)) = civ.get_mut("images") {
+        for img in images {
+            if let Some(Value::Object(meta)) = img.get_mut("meta") {
+                meta.remove("comfy");
+            }
+        }
+    }
+}
+
+/// Merge model-level fields into a `/model-versions/{id}` payload the way LoRA Manager stores it
+/// (`_enrich_version_with_model_data`).
 pub fn civitai_block(version: &Value, model: &Value) -> Map<String, Value> {
     let mut civ = version.as_object().cloned().unwrap_or_default();
     if !civ.contains_key("modelId") {
@@ -214,15 +274,18 @@ pub fn civitai_block(version: &Value, model: &Value) -> Map<String, Value> {
             }
         }
     }
-    for k in ["description", "tags", "allowNoCredit", "allowCommercialUse", "allowDerivatives", "allowDifferentLicense"] {
-        if let Some(v) = model.get(k) {
-            m.insert(k.into(), v.clone());
+    if model.is_object() {
+        m.insert("description".into(), model.get("description").cloned().unwrap_or(Value::Null));
+        m.insert("tags".into(), model.get("tags").cloned().unwrap_or(json!([])));
+        for (k, v) in resolve_license_payload(model) {
+            m.insert(k, v);
         }
     }
     civ.insert("model".into(), Value::Object(m));
     if let Some(c) = model.get("creator") {
         civ.insert("creator".into(), c.clone());
     }
+    strip_comfy(&mut civ);
     civ
 }
 

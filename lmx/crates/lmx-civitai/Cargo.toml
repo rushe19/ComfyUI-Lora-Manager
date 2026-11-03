@@ -12,6 +12,8 @@ tokio.workspace = true
 lmx-core = { path = "../lmx-core" }
 reqwest = { version = "0.13", default-features = false, features = ["native-tls", "json", "stream", "gzip", "http2", "charset"] }
 regex = "1"
+rusqlite = { version = "0.41", features = ["bundled"] }
+hex = "0.4"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util", "macros", "rt-multi-thread"] }

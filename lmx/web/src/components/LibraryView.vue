@@ -4,6 +4,7 @@ import { fetchFacets, fetchFolders, fetchModels, fetchStatus, type Facets, type 
 import { isOpen, openOverlay, closeOverlay } from '../overlay'
 import ModelGrid from './ModelGrid.vue'
 import DetailSheet from './DetailSheet.vue'
+import BulkBar from './BulkBar.vue'
 
 const props = defineProps<{ active?: boolean }>()
 
@@ -22,6 +23,7 @@ const f = reactive({
   folder: null as string | null,
   fav: false,
   damaged: false,
+  unlinked: false,
   sort: (localStorage.getItem('lmx.sort') as SortKey) || 'name',
   desc: localStorage.getItem('lmx.desc') === '1',
 })
@@ -38,7 +40,63 @@ const selectedId = ref<number | null>(null)
 let generation = 0
 let ctrl: AbortController | null = null
 
-const activeFilters = computed(() => f.base.length + (f.folder != null ? 1 : 0) + (f.fav ? 1 : 0) + (f.damaged ? 1 : 0))
+const activeFilters = computed(() => f.base.length + (f.folder != null ? 1 : 0) + (f.fav ? 1 : 0) + (f.damaged ? 1 : 0) + (f.unlinked ? 1 : 0))
+
+// Selection mode (long press or the 選択 button).
+const selecting = ref(false)
+const selected = ref<Set<number>>(new Set())
+function toggleSelect(id: number) {
+  const s = new Set(selected.value)
+  if (s.has(id)) s.delete(id)
+  else s.add(id)
+  selected.value = s
+}
+function startSelect(id?: number) {
+  selecting.value = true
+  if (id != null) toggleSelect(id)
+}
+function endSelect() {
+  selecting.value = false
+  selected.value = new Set()
+}
+function onCard(id: number) {
+  if (selecting.value) toggleSelect(id)
+  else openDetail(id)
+}
+function selectAllLoaded() {
+  selected.value = new Set(items.value.map((i) => i.id))
+}
+function afterBulk(clear: boolean) {
+  if (clear) endSelect()
+  void softRefresh()
+}
+function refreshAll() {
+  void softRefresh()
+}
+/** Reload what is already loaded without jumping back to the top. */
+async function softRefresh() {
+  const gen = ++generation
+  ctrl?.abort()
+  ctrl = new AbortController()
+  try {
+    const page = await fetchModels(
+      { type: f.type, q: f.q, base: f.base, folder: f.folder, fav: f.fav, damaged: f.damaged, unlinked: f.unlinked, sort: f.sort, desc: f.desc, offset: 0, limit: Math.max(items.value.length, PAGE) },
+      ctrl.signal,
+    )
+    if (gen !== generation) return
+    items.value = page.items
+    total.value = page.total
+    nextOffset.value = page.next_offset
+    loading.value = false
+  } catch (e) {
+    if (gen === generation && (e as Error).name !== 'AbortError') error.value = String(e)
+  }
+  void loadFacets()
+  void refreshCounts()
+}
+function reopen(id: number) {
+  selectedId.value = id
+}
 const shownFolders = computed(() => {
   const needle = folderFilter.value.trim().toLowerCase()
   const list = folders.value.filter((x) => x.path !== '')
@@ -52,7 +110,7 @@ async function loadMore() {
   ctrl = new AbortController()
   try {
     const page = await fetchModels(
-      { type: f.type, q: f.q, base: f.base, folder: f.folder, fav: f.fav, damaged: f.damaged, sort: f.sort, desc: f.desc, offset: nextOffset.value, limit: PAGE },
+      { type: f.type, q: f.q, base: f.base, folder: f.folder, fav: f.fav, damaged: f.damaged, unlinked: f.unlinked, sort: f.sort, desc: f.desc, offset: nextOffset.value, limit: PAGE },
       ctrl.signal,
     )
     if (gen !== generation) return
@@ -94,7 +152,7 @@ watch(
   },
 )
 watch(
-  () => [f.base.join(','), f.folder, f.fav, f.damaged, f.sort, f.desc],
+  () => [f.base.join(','), f.folder, f.fav, f.damaged, f.unlinked, f.sort, f.desc],
   () => {
     localStorage.setItem('lmx.sort', f.sort)
     localStorage.setItem('lmx.desc', f.desc ? '1' : '0')
@@ -107,6 +165,7 @@ watch(
     localStorage.setItem('lmx.type', t)
     f.base = []
     f.folder = null
+    endSelect()
     reset()
     void loadFacets()
   },
@@ -120,6 +179,7 @@ function clearFilters() {
   f.folder = null
   f.fav = false
   f.damaged = false
+  f.unlinked = false
 }
 function openDetail(id: number) {
   selectedId.value = id
@@ -147,8 +207,7 @@ watch(
   () => props.active,
   async (a) => {
     if (a && (await refreshCounts())) {
-      reset()
-      void loadFacets()
+      void softRefresh()
     }
   },
 )
@@ -173,6 +232,7 @@ onMounted(() => {
         <button class="filter-btn" :class="{ on: activeFilters > 0 }" @click="openFilters">
           絞り込み<span v-if="activeFilters">{{ activeFilters }}</span>
         </button>
+        <button class="filter-btn" :class="{ on: selecting }" @click="selecting ? endSelect() : startSelect()">{{ selecting ? '完了' : '選択' }}</button>
       </div>
       <div class="result-line">
         <span>{{ total.toLocaleString() }} 件</span>
@@ -180,11 +240,13 @@ onMounted(() => {
         <span v-for="b in f.base" :key="b" class="chip" @click="toggleBase(b)">{{ b }} ✕</span>
         <span v-if="f.fav" class="chip" @click="f.fav = false">★ お気に入り ✕</span>
         <span v-if="f.damaged" class="chip warn" @click="f.damaged = false">要修復 ✕</span>
+        <span v-if="f.unlinked" class="chip" @click="f.unlinked = false">メタデータ未取得 ✕</span>
       </div>
     </header>
 
     <p v-if="error" class="err">読み込みに失敗しました: {{ error }}</p>
-    <ModelGrid :items="items" :total="total" :loading="loading" @need-more="loadMore" @open="openDetail" />
+    <ModelGrid :items="items" :total="total" :loading="loading" :selected="selecting ? selected : undefined" @need-more="loadMore" @open="onCard" @long="startSelect" />
+    <BulkBar v-if="selecting" :ids="[...selected]" :type="f.type" @done="afterBulk" @select-all="selectAllLoaded" @clear="selected = new Set()" />
 
     <div v-if="isOpen('filters')" class="sheet-backdrop" @click.self="closeOverlay">
       <div class="sheet filters">
@@ -204,6 +266,7 @@ onMounted(() => {
           <h4>表示</h4>
           <label class="check"><input v-model="f.fav" type="checkbox" /> お気に入りのみ</label>
           <label class="check"><input v-model="f.damaged" type="checkbox" /> 要修復（メタデータ破損）のみ</label>
+          <label class="check"><input v-model="f.unlinked" type="checkbox" /> メタデータ未取得（Civitai 情報なし）のみ</label>
           <h4>ベースモデル</h4>
           <div class="chips">
             <button v-for="b in facets.base_models" :key="b.name" class="chip" :class="{ active: f.base.includes(b.name) }" @click="toggleBase(b.name)">
@@ -222,6 +285,6 @@ onMounted(() => {
       </div>
     </div>
 
-    <DetailSheet v-if="isOpen('detail') && selectedId != null" :id="selectedId" @close="closeOverlay" />
+    <DetailSheet v-if="isOpen('detail') && selectedId != null" :id="selectedId" @close="closeOverlay" @changed="refreshAll" @reopen="reopen" />
   </section>
 </template>

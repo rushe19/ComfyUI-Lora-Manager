@@ -3,6 +3,9 @@
 pub mod api;
 pub mod civitai_api;
 pub mod downloads;
+pub mod metadata;
+pub mod ops;
+pub mod watch;
 pub mod preview;
 pub mod state;
 
@@ -37,7 +40,15 @@ pub fn app(state: Arc<AppState>, web_dir: PathBuf) -> Router {
         .route("/status", get(api::status))
         .route("/scan", post(api::start_scan))
         .route("/models", get(api::list_models))
-        .route("/models/{id}", get(api::model_detail))
+        .route("/models/{id}", get(api::model_detail).patch(ops::edit).delete(ops::delete_model))
+        .route("/models/{id}/move", post(ops::move_model))
+        .route("/bulk", post(ops::bulk))
+        .route("/trash", get(ops::trash_list))
+        .route("/trash/{id}/restore", post(ops::trash_restore))
+        .route("/duplicates", get(ops::duplicates))
+        .route("/metadata/fetch", post(ops::metadata_start))
+        .route("/metadata/preview", post(ops::metadata_preview))
+        .route("/metadata/job", get(ops::metadata_job).delete(ops::metadata_cancel))
         .route("/folders", get(api::folders))
         .route("/facets", get(api::facets))
         .route("/preview/{id}", get(preview::preview))

@@ -29,6 +29,11 @@ pub struct AppState {
     pub thumb_permits: tokio::sync::Semaphore,
     pub civitai: lmx_civitai::CivitaiClient,
     pub downloads: crate::downloads::Downloads,
+    /// Local CivArchive metadata archive, opened on first use.
+    pub archive: RwLock<Option<Arc<lmx_civitai::archive::Archive>>>,
+    pub meta: crate::metadata::MetaJobs,
+    /// Serializes sidecar writes made by lmx (edits, metadata job, moves).
+    pub writes: tokio::sync::Mutex<()>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -61,6 +66,9 @@ impl AppState {
             thumb_permits: tokio::sync::Semaphore::new(4),
             civitai,
             downloads,
+            archive: RwLock::new(None),
+            meta: Default::default(),
+            writes: tokio::sync::Mutex::new(()),
         }))
     }
 

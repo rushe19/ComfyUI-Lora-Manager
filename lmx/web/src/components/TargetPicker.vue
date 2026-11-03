@@ -4,7 +4,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { downloadTargets, type ModelType, type Targets } from '../api'
 import { lastTarget, normalizeFolder, suggestFolders, type Target } from '../targets'
 
-const props = defineProps<{ type: ModelType; baseModel?: string }>()
+const props = defineProps<{ type: ModelType; baseModel?: string; initial?: Target }>()
 const model = defineModel<Target>({ required: true })
 
 const targets = ref<Targets | null>(null)
@@ -14,7 +14,7 @@ const error = ref('')
 async function load() {
   try {
     targets.value = await downloadTargets(props.type)
-    const last = lastTarget(props.type)
+    const last = props.initial ?? lastTarget(props.type)
     model.value = { root: last.root ?? targets.value.roots[0] ?? null, folder: last.folder }
   } catch (e) {
     error.value = String(e)

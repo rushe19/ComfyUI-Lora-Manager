@@ -326,7 +326,7 @@ async fn download(state: &Arc<AppState>, id: i64, live: &Live) -> anyhow::Result
     Ok(Outcome::Done(dest))
 }
 
-fn image_ext(bytes: &[u8]) -> Option<&'static str> {
+pub fn image_ext(bytes: &[u8]) -> Option<&'static str> {
     if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
         Some("jpeg")
     } else if bytes.starts_with(b"\x89PNG") {
@@ -380,10 +380,7 @@ async fn write_sidecar(job: &DownloadJob, model: &Path, sha: &str, preview: Opti
         now: now(),
     };
     let map = lmx_civitai::sidecar::build(&version, &model_json, &file, &local);
-    let text = serde_json::to_string_pretty(&Value::Object(map))?;
-    let tmp = paths::append(&side, ".tmp");
-    tokio::fs::write(&tmp, text).await?;
-    tokio::fs::rename(&tmp, &side).await?;
+    lmx_core::sidecar::write(&side, &map, None)?;
     Ok(())
 }
 

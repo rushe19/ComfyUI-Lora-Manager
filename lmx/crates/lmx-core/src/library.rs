@@ -43,6 +43,8 @@ pub struct Query {
     pub favorites_only: bool,
     /// Only models whose sidecar is damaged or unreadable.
     pub damaged_only: bool,
+    /// Only models without Civitai metadata (no version id).
+    pub unlinked_only: bool,
     pub include_excluded: bool,
     pub sort: SortKey,
     pub descending: bool,
@@ -114,6 +116,30 @@ impl Library {
         self.by_id.get(&id).map(|&i| self.entries[i].rec.clone())
     }
 
+    /// Every record (sorted by name), for jobs that select their own targets.
+    pub fn all(&self) -> impl Iterator<Item = &Arc<ModelRecord>> {
+        self.entries.iter().map(|e| &e.rec)
+    }
+
+    /// Groups of two or more models with the same sha256, largest groups first.
+    pub fn duplicates(&self, t: Option<ModelType>) -> Vec<Vec<Arc<ModelRecord>>> {
+        let mut groups: HashMap<&str, Vec<Arc<ModelRecord>>> = HashMap::new();
+        for e in &self.entries {
+            if t.is_some_and(|t| e.rec.model_type != t) {
+                continue;
+            }
+            if let Some(s) = e.rec.sha256.as_deref() {
+                groups.entry(s).or_default().push(e.rec.clone());
+            }
+        }
+        let mut out: Vec<Vec<Arc<ModelRecord>>> = groups.into_values().filter(|g| g.len() > 1).collect();
+        for g in &mut out {
+            g.sort_by(|a, b| a.file_path.cmp(&b.file_path));
+        }
+        out.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| b[0].size.cmp(&a[0].size)).then_with(|| a[0].file_path.cmp(&b[0].file_path)));
+        out
+    }
+
     /// All records keyed by scan file key (input for the next incremental scan).
     pub fn previous_map(&self) -> HashMap<String, ModelRecord> {
         self.entries
@@ -141,6 +167,9 @@ impl Library {
             return false;
         }
         if q.favorites_only && !r.favorite {
+            return false;
+        }
+        if q.unlinked_only && r.civitai_version_id.is_some() {
             return false;
         }
         if q.damaged_only && r.damage.is_none() && r.sidecar_error.is_none() {

@@ -30,6 +30,12 @@ async fn main() -> anyhow::Result<()> {
     // Serve right away from the stored index; refresh it in the background.
     state.spawn_scan();
     lmx_server::downloads::spawn_worker(state.clone());
+    let _watch = if state.cfg.watch { lmx_server::watch::start(state.clone()) } else { None };
+    if state.cfg.archive_db.is_some() {
+        // Build/verify the archive hash table in the background (first time ~15 s).
+        let st = state.clone();
+        tokio::task::spawn_blocking(move || lmx_server::metadata::ensure_archive(&st));
+    }
     if !state.civitai.has_key() {
         tracing::warn!("no Civitai API key: set civitai_api_key in lmx.toml (or lm_settings) for favorites and gated downloads");
     }

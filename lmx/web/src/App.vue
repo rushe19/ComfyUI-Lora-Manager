@@ -5,7 +5,7 @@ import CivitaiView from './components/CivitaiView.vue'
 import DownloadsView from './components/DownloadsView.vue'
 import LibraryView from './components/LibraryView.vue'
 import SettingsView from './components/SettingsView.vue'
-import { toastText } from './toast'
+import { runToastAction, toastAction, toastText } from './toast'
 
 type Tab = 'library' | 'civitai' | 'downloads' | 'settings'
 const tab = ref<Tab>('library')
@@ -49,6 +49,6 @@ onBeforeUnmount(() => window.clearTimeout(timer))
         <span class="icon">{{ t.icon }}<b v-if="t.id === 'downloads' && activeDownloads" class="nav-badge">{{ activeDownloads }}</b></span><span>{{ t.label }}</span>
       </button>
     </nav>
-    <div v-if="toastText" class="toast" role="status">{{ toastText }}</div>
+    <div v-if="toastText" class="toast" role="status">{{ toastText }}<button v-if="toastAction" class="toast-action" @click="runToastAction">{{ toastAction.label }}</button></div>
   </div>
 </template>

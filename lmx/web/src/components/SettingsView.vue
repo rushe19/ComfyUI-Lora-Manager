@@ -4,6 +4,8 @@ import { fetchHealth, fetchStatus, startScan, type Status } from '../api'
 import { prefs, type Theme } from '../prefs'
 import { toast } from '../toast'
 import { formatDate } from '../util'
+import MetadataPanel from './MetadataPanel.vue'
+import ToolsPanels from './ToolsPanels.vue'
 
 const status = ref<Status | null>(null)
 const version = ref('')
@@ -75,6 +77,9 @@ const themes: { id: Theme; label: string }[] = [
       </p>
       <button :disabled="status.scanning" @click="rescan">再スキャン</button>
     </div>
+
+    <MetadataPanel />
+    <ToolsPanels />
 
     <div v-if="status" class="card-box">
       <h4>モデルの場所</h4>

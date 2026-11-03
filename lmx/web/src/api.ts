@@ -20,6 +20,7 @@ export interface ModelSummary {
   favorite: boolean
   nsfw_level: number
   has_metadata: boolean
+  linked: boolean
   damaged: boolean
   preview: string | null
   preview_kind: 'image' | 'video' | null
@@ -58,6 +59,8 @@ export interface ModelDetail {
   model_description: string
   version_description: string
   notes: string
+  exclude: boolean
+  skip_metadata_refresh: boolean
   usage_tips: string | null
   strength: number
   lora_syntax: string | null
@@ -114,6 +117,7 @@ export interface ListParams {
   recursive?: boolean
   fav?: boolean
   damaged?: boolean
+  unlinked?: boolean
   sort?: SortKey
   desc?: boolean
   offset?: number
@@ -133,6 +137,7 @@ export function buildListQuery(p: ListParams): string {
   }
   if (p.fav) s.set('fav', '1')
   if (p.damaged) s.set('damaged', '1')
+  if (p.unlinked) s.set('unlinked', '1')
   if (p.sort && p.sort !== 'name') s.set('sort', p.sort)
   if (p.desc) s.set('order', 'desc')
   if (p.offset) s.set('offset', String(p.offset))
@@ -330,3 +335,90 @@ export const enqueueUrls = (b: { text: string; type: ModelType; root?: string | 
 export const listDownloads = () => send<{ jobs: DownloadJob[] }>('GET', '/api/downloads')
 export const cancelDownload = (id: number) => send<{ result: string }>('DELETE', `/api/downloads/${id}`)
 export const retryDownload = (id: number) => send<{ result: string }>('POST', `/api/downloads/${id}/retry`)
+
+// ---- Library writes (Phase 3) ----
+
+export interface EditBody {
+  model_name?: string
+  tags?: string[]
+  notes?: string
+  favorite?: boolean
+  exclude?: boolean
+  base_model?: string
+  trained_words?: string[]
+  strength?: number
+  repair?: boolean
+}
+
+export interface TrashEntry {
+  id: number
+  at: number
+  model_name: string
+  model_type: ModelType
+  paths: string[]
+  restored: boolean
+}
+
+export type MetadataMode = 'archive_first' | 'archive_only' | 'civitai_first'
+
+export interface MetaJob {
+  id: number
+  mode: MetadataMode | null
+  running: boolean
+  canceled: boolean
+  started_at: number
+  finished_at: number | null
+  total: number
+  done: number
+  current: string
+  archive_hits: number
+  civitai_hits: number
+  unresolved: number
+  skipped: number
+  hashed: number
+  errors: number
+  api_requests: number
+  image_requests: number
+  previews_added: number
+  backup_dir: string | null
+  recent_errors: string[]
+  elapsed_secs: number
+}
+
+export interface MetaTarget {
+  type?: ModelType
+  ids?: number[]
+  folder?: string
+  mode?: MetadataMode
+  only_unlinked?: boolean
+  previews?: boolean
+  retry_misses?: boolean
+}
+
+export interface MetaPreview {
+  total: number
+  in_archive: number
+  no_hash: number
+  archive: { path: string; hashes: number } | null
+  default_mode: MetadataMode
+}
+
+export interface DupGroup {
+  sha256: string
+  size: number
+  items: { summary: ModelSummary; file_path: string }[]
+}
+
+export const editModel = (id: number, b: EditBody) => send<ModelDetail>('PATCH', `/api/models/${id}`, b)
+export const moveModel = (id: number, b: { root?: string | null; folder?: string; name?: string }) =>
+  send<{ path: string; id: number | null }>('POST', `/api/models/${id}/move`, b)
+export const deleteModel = (id: number) => send<{ trash: TrashEntry }>('DELETE', `/api/models/${id}`)
+export const listTrash = () => send<{ items: TrashEntry[] }>('GET', '/api/trash')
+export const restoreTrash = (id: number) => send<{ restored: TrashEntry }>('POST', `/api/trash/${id}/restore`)
+export const bulkAction = (b: { ids: number[]; action: string; value?: unknown; root?: string | null; folder?: string }) =>
+  send<{ ok: number; errors: string[]; trash_ids: number[] }>('POST', '/api/bulk', b)
+export const fetchDuplicates = (type: ModelType) => send<{ groups: DupGroup[]; wasted_bytes: number }>('GET', `/api/duplicates?type=${type}`)
+export const metadataPreview = (t: MetaTarget) => send<MetaPreview>('POST', '/api/metadata/preview', t)
+export const startMetadata = (t: MetaTarget) => send<{ job: MetaJob }>('POST', '/api/metadata/fetch', t)
+export const metadataJob = () => send<{ job: MetaJob | null }>('GET', '/api/metadata/job')
+export const cancelMetadata = () => send<{ canceling: boolean }>('DELETE', '/api/metadata/job')

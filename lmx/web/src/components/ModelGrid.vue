@@ -4,8 +4,37 @@ import type { ModelSummary } from '../api'
 import { prefs } from '../prefs'
 import { computeGrid, isMature, visibleRows } from '../util'
 
-const props = defineProps<{ items: ModelSummary[]; total: number; loading: boolean }>()
-const emit = defineEmits<{ (e: 'need-more'): void; (e: 'open', id: number): void }>()
+const props = defineProps<{ items: ModelSummary[]; total: number; loading: boolean; selected?: Set<number> }>()
+const emit = defineEmits<{ (e: 'need-more'): void; (e: 'open', id: number): void; (e: 'long', id: number): void }>()
+
+// Long press (500 ms without moving) selects instead of opening.
+let pressTimer: number | undefined
+let pressAt: { x: number; y: number } | null = null
+let longFired = false
+function onDown(id: number, ev: PointerEvent) {
+  longFired = false
+  pressAt = { x: ev.clientX, y: ev.clientY }
+  window.clearTimeout(pressTimer)
+  pressTimer = window.setTimeout(() => {
+    longFired = true
+    navigator.vibrate?.(15)
+    emit('long', id)
+  }, 500)
+}
+function onMove(ev: PointerEvent) {
+  if (pressAt && Math.hypot(ev.clientX - pressAt.x, ev.clientY - pressAt.y) > 10) window.clearTimeout(pressTimer)
+}
+function onUp() {
+  window.clearTimeout(pressTimer)
+  pressAt = null
+}
+function onClick(id: number) {
+  if (longFired) {
+    longFired = false
+    return
+  }
+  emit('open', id)
+}
 
 const scroller = ref<HTMLElement | null>(null)
 const width = ref(360)
@@ -60,7 +89,20 @@ function style(index: number) {
 <template>
   <div ref="scroller" class="grid-scroller" @scroll.passive="onScroll">
     <div class="grid-inner" :style="{ height: rows * layout.rowHeight + 'px' }">
-      <button v-for="{ item, index } in visible" :key="item.id" class="card" :style="style(index)" @click="emit('open', item.id)">
+      <button
+        v-for="{ item, index } in visible"
+        :key="item.id"
+        class="card"
+        :class="{ selected: selected?.has(item.id) }"
+        :style="style(index)"
+        @pointerdown="onDown(item.id, $event)"
+        @pointermove="onMove"
+        @pointerup="onUp"
+        @pointercancel="onUp"
+        @pointerleave="onUp"
+        @contextmenu.prevent
+        @click="onClick(item.id)"
+      >
         <div class="thumb" :class="{ blur: prefs.blurMature && isMature(item.nsfw_level) }">
           <video v-if="item.preview && item.preview_kind === 'video' && prefs.showVideos" :src="item.preview" muted playsinline loop autoplay preload="metadata" />
           <img v-else-if="item.preview && item.preview_kind === 'image'" :src="item.preview" decoding="async" alt="" />
@@ -68,6 +110,8 @@ function style(index: number) {
           <span class="base">{{ item.base_model }}</span>
           <span v-if="item.favorite" class="fav">★</span>
           <span v-if="item.damaged" class="damaged">要修復</span>
+          <span v-else-if="!item.linked" class="unlinked" title="メタデータ未取得">?</span>
+          <span v-if="selected" class="check">{{ selected.has(item.id) ? '✓' : '' }}</span>
         </div>
         <div class="caption">{{ item.name }}</div>
       </button>

@@ -3,6 +3,7 @@
 pub mod config;
 pub mod downloads;
 pub mod library;
+pub mod ops;
 pub mod model_type;
 pub mod paths;
 pub mod record;

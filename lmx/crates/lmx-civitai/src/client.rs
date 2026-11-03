@@ -176,6 +176,11 @@ impl CivitaiClient {
         self.get_json(&format!("/model-versions/{id}"), &[], false).await
     }
 
+    /// Version for a file hash (`/model-versions/by-hash/{sha256}`); 404 when Civitai doesn't know it.
+    pub async fn by_hash(&self, sha256: &str) -> Result<Value, CivitaiError> {
+        self.get_json(&format!("/model-versions/by-hash/{}", sha256.to_ascii_lowercase()), &[], false).await
+    }
+
     /// Start a file download; reqwest drops the Authorization header on the cross-host redirect
     /// to the signed storage URL.
     pub async fn download(&self, url: &str, from_byte: u64) -> Result<reqwest::Response, CivitaiError> {

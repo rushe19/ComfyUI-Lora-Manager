@@ -1,12 +1,73 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { fetchDetail, type ModelDetail } from '../api'
+import { computed, onMounted, ref, watch } from 'vue'
+import { ApiError, editModel, fetchDetail, metadataJob, startMetadata, type ModelDetail } from '../api'
+import { trashWithUndo } from '../actions'
+import { closeOverlay, isOpen, openOverlay } from '../overlay'
 import { prefs } from '../prefs'
 import { toast } from '../toast'
 import { copyText, formatDate, formatSize, htmlToText, isMature } from '../util'
+import EditPanel from './EditPanel.vue'
+import MovePanel from './MovePanel.vue'
 
 const props = defineProps<{ id: number }>()
-const emit = defineEmits<{ (e: 'close'): void }>()
+const emit = defineEmits<{ (e: 'close'): void; (e: 'changed'): void; (e: 'reopen', id: number): void }>()
+const fetching = ref(false)
+const confirmDelete = ref(false)
+
+async function reload() {
+  d.value = await fetchDetail(props.id)
+}
+watch(() => props.id, () => void reload())
+
+async function toggleFavorite() {
+  if (!d.value) return
+  try {
+    d.value = await editModel(d.value.summary.id, { favorite: !d.value.summary.favorite })
+    emit('changed')
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : String(e), 3000)
+  }
+}
+
+async function fetchMeta() {
+  if (!d.value) return
+  fetching.value = true
+  try {
+    await startMetadata({ ids: [d.value.summary.id], only_unlinked: false })
+    for (let i = 0; i < 300; i++) {
+      await new Promise((r) => setTimeout(r, 400))
+      const j = (await metadataJob()).job
+      if (j && !j.running) {
+        toast(j.archive_hits ? 'アーカイブ DB から取得しました' : j.civitai_hits ? 'Civitai から取得しました' : j.skipped ? '取得をスキップしました（除外設定か破損）' : '見つかりませんでした', 3000)
+        break
+      }
+    }
+    await reload()
+    emit('changed')
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : String(e), 3000)
+  } finally {
+    fetching.value = false
+  }
+}
+
+async function doDelete() {
+  if (!d.value) return
+  confirmDelete.value = false
+  if (await trashWithUndo(d.value.summary.id, () => emit('changed'))) emit('close')
+}
+
+function onSaved(nd: ModelDetail) {
+  d.value = nd
+  closeOverlay()
+  emit('changed')
+}
+function onMoved(newId: number | null) {
+  closeOverlay()
+  emit('changed')
+  if (newId != null && newId !== props.id) emit('reopen', newId)
+  else void reload()
+}
 
 const d = ref<ModelDetail | null>(null)
 const error = ref('')
@@ -59,6 +120,17 @@ async function copy(text: string, label: string) {
             <button v-if="d.trained_words.length" @click="copy(d.trained_words.join(', '), 'トリガーワード')">トリガーワードを全部コピー</button>
             <a v-if="d.civitai_url" class="button" :href="d.civitai_url" target="_blank" rel="noopener noreferrer">Civitai で開く ↗</a>
           </div>
+          <div class="actions tools">
+            <button :class="{ on: d.summary.favorite }" @click="toggleFavorite">{{ d.summary.favorite ? '★ お気に入り' : '☆ お気に入り' }}</button>
+            <button @click="openOverlay('edit')">✎ 編集</button>
+            <button @click="openOverlay('move')">⇄ 移動・改名</button>
+            <button :disabled="fetching" @click="fetchMeta">{{ fetching ? '取得中…' : d.summary.linked ? '↻ メタデータ更新' : '⤓ メタデータ取得' }}</button>
+            <button class="danger" @click="confirmDelete = true">🗑 削除</button>
+          </div>
+          <p v-if="confirmDelete" class="warn-box">
+            「{{ d.summary.name }}」と付属ファイルを Windows のゴミ箱へ移動します。
+            <span class="actions"><button class="danger" @click="doDelete">ゴミ箱へ移動</button><button @click="confirmDelete = false">やめる</button></span>
+          </p>
 
           <section v-if="d.trained_words.length">
             <h4>トリガーワード <small>（タップでコピー）</small></h4>
@@ -106,6 +178,8 @@ async function copy(text: string, label: string) {
           </section>
         </template>
       </div>
+      <EditPanel v-if="d && isOpen('edit')" :d="d" @saved="onSaved" @close="closeOverlay" />
+      <MovePanel v-if="d && isOpen('move')" :d="d" @moved="onMoved" @close="closeOverlay" />
     </article>
   </div>
 </template>

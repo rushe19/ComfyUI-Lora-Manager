@@ -72,6 +72,16 @@ pub struct Config {
     /// Parallel model downloads.
     #[serde(default = "default_download_concurrency")]
     pub download_concurrency: usize,
+    /// Where metadata comes from when creating/refreshing `metadata.json` (利用者要望).
+    #[serde(default)]
+    pub metadata_source: MetadataSource,
+    /// CivArchive metadata archive (read-only). Defaults to LoRA Manager's `civitai/civitai.sqlite`
+    /// next to `lm_settings` when LoRA Manager has `enable_metadata_archive_db` on.
+    #[serde(default)]
+    pub archive_db: Option<PathBuf>,
+    /// Watch the model folders and rescan on changes.
+    #[serde(default = "default_true")]
+    pub watch: bool,
     /// Directory holding lmx.toml, index.sqlite and caches. Not serialized.
     #[serde(skip)]
     pub data_dir: PathBuf,
@@ -89,6 +99,33 @@ fn default_download_concurrency() -> usize {
     2
 }
 
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MetadataSource {
+    /// Local archive first, Civitai only for what the archive lacks.
+    #[default]
+    ArchiveFirst,
+    /// Local archive only; never ask Civitai.
+    ArchiveOnly,
+    /// Civitai first (freshest), archive as fallback.
+    CivitaiFirst,
+}
+
+impl MetadataSource {
+    pub fn parse(s: &str) -> Option<MetadataSource> {
+        match s {
+            "archive_first" => Some(MetadataSource::ArchiveFirst),
+            "archive_only" => Some(MetadataSource::ArchiveOnly),
+            "civitai_first" => Some(MetadataSource::CivitaiFirst),
+            _ => None,
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Config {
@@ -99,6 +136,9 @@ impl Default for Config {
             civitai_api_base: None,
             civitai_api_key: None,
             download_concurrency: default_download_concurrency(),
+            metadata_source: MetadataSource::default(),
+            archive_db: None,
+            watch: false,
             data_dir: PathBuf::from("data"),
         }
     }
@@ -128,6 +168,21 @@ impl Config {
                     .ok()
                     .and_then(|v| v.get("civitai_api_key").and_then(|k| k.as_str()).map(str::to_string))
                     .filter(|k| !k.trim().is_empty());
+            }
+            if cfg.archive_db.is_none() {
+                let enabled = serde_json::from_str::<serde_json::Value>(&text)
+                    .ok()
+                    .and_then(|v| v.get("enable_metadata_archive_db").and_then(|b| b.as_bool()))
+                    .unwrap_or(false);
+                let candidate = lm.parent().map(|d| d.join("civitai").join("civitai.sqlite"));
+                if let Some(c) = candidate.filter(|c| enabled && c.is_file()) {
+                    cfg.archive_db = Some(c);
+                }
+            }
+        }
+        if let Some(a) = cfg.archive_db.clone() {
+            if a.is_relative() {
+                cfg.archive_db = Some(data_dir.join(a));
             }
         }
         Ok(cfg)
