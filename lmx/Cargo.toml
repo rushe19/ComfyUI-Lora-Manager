@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/lmx-server", "crates/lmx-scan"]
+members = ["crates/lmx-core", "crates/lmx-server", "crates/lmx-scan"]
 
 [workspace.package]
 version = "0.0.1"
