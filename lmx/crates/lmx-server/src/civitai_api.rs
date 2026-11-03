@@ -11,7 +11,7 @@ use axum::{
 use lmx_civitai::{
     client::CivitaiError,
     map::{self, Ownership},
-    SearchParams,
+    resort, SearchParams,
 };
 use lmx_core::{
     downloads::{DownloadJob, JobStatus},
@@ -79,20 +79,42 @@ pub async fn search(State(st): State<Arc<AppState>>, Query(p): Query<SearchQuery
         favorites: p.favorites.unwrap_or(0) == 1,
         username: None,
     };
+    let lib = st.library();
+    let jobs = st.downloads.version_status();
+    let own = Ownership { by_sha: Some(lib.sha_index()), by_version: Some(lib.version_index()), jobs: Some(&jobs) };
+
+    // Civitai ignores `sort` when `query` is set: sort the relevance pool ourselves.
+    if resort::wants_resort(&params.query, params.sort.as_deref()) {
+        let (pool, capped) = match st.civitai.search_pool(&params, resort::POOL_MAX).await {
+            Ok(v) => v,
+            Err(e) => return civitai_err(e),
+        };
+        let mut sorted: Vec<Value> = pool.as_ref().clone();
+        resort::sort_pool(&mut sorted, params.sort.as_deref().unwrap_or(""));
+        let offset = resort::parse_cursor(params.cursor.as_deref());
+        let limit = (params.limit.clamp(1, 100)) as usize;
+        let items: Vec<Value> = sorted.iter().skip(offset).take(limit).map(|m| map::card(m, &own, &st.cfg.civitai_host)).collect();
+        let next = (offset + limit < sorted.len()).then(|| format!("r{}", offset + limit));
+        return Json(json!({
+            "items": items,
+            "next_cursor": next,
+            "has_key": st.civitai.has_key(),
+            "resorted": { "pool": sorted.len(), "capped": capped },
+        }))
+        .into_response();
+    }
+
     let res = match st.civitai.search(&params).await {
         Ok(v) => v,
         Err(e) => return civitai_err(e),
     };
-    let lib = st.library();
-    let jobs = st.downloads.version_status();
-    let own = Ownership { by_sha: Some(lib.sha_index()), by_version: Some(lib.version_index()), jobs: Some(&jobs) };
     let items: Vec<Value> = res
         .get("items")
         .and_then(Value::as_array)
         .map(|a| a.iter().map(|m| map::card(m, &own, &st.cfg.civitai_host)).collect())
         .unwrap_or_default();
     let next = res.pointer("/metadata/nextCursor").cloned().unwrap_or(Value::Null);
-    Json(json!({ "items": items, "next_cursor": next, "has_key": st.civitai.has_key() })).into_response()
+    Json(json!({ "items": items, "next_cursor": next, "has_key": st.civitai.has_key(), "resorted": null })).into_response()
 }
 
 pub async fn model(State(st): State<Arc<AppState>>, Path(id): Path<i64>) -> Response {

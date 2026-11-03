@@ -5,6 +5,7 @@ pub mod client;
 pub mod limiter;
 pub mod map;
 pub mod merge;
+pub mod resort;
 pub mod sidecar;
 pub mod url;
 

@@ -4,6 +4,7 @@ import { fetchHealth, fetchStatus, startScan, type Status } from '../api'
 import { prefs, type Theme } from '../prefs'
 import { toast } from '../toast'
 import { formatDate } from '../util'
+import BaseModelSettings from './BaseModelSettings.vue'
 import MetadataPanel from './MetadataPanel.vue'
 import ToolsPanels from './ToolsPanels.vue'
 
@@ -78,6 +79,7 @@ const themes: { id: Theme; label: string }[] = [
       <button :disabled="status.scanning" @click="rescan">再スキャン</button>
     </div>
 
+    <BaseModelSettings />
     <MetadataPanel />
     <ToolsPanels />
 

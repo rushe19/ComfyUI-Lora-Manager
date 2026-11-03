@@ -280,3 +280,9 @@ button.danger.small, button.small { padding: 4px 8px; font-size: 12px; border-ra
 .err-text { color: var(--danger); }
 .dup-group { border-top: 1px solid var(--line); padding: 6px 0; }
 .dup-item { display: flex; gap: 8px; align-items: center; justify-content: space-between; font-size: 12px; padding: 3px 0; word-break: break-all; }
+
+/* Base model prefs */
+.bm-list { list-style: none; margin: 6px 0 0; padding: 0; max-height: 50dvh; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 2px 8px; }
+.bm-list .check { font-size: 13px; }
+.badge.new { background: var(--accent); color: var(--accent-fg); }
+.chip.more { border-style: dashed; }

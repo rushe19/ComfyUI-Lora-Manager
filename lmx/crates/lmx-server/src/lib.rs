@@ -7,6 +7,7 @@ pub mod metadata;
 pub mod ops;
 pub mod watch;
 pub mod preview;
+pub mod search_prefs;
 pub mod state;
 
 use std::{path::PathBuf, sync::Arc};
@@ -53,6 +54,7 @@ pub fn app(state: Arc<AppState>, web_dir: PathBuf) -> Router {
         .route("/facets", get(api::facets))
         .route("/preview/{id}", get(preview::preview))
         .route("/civitai/search", get(civitai_api::search))
+        .route("/civitai/base-models", get(search_prefs::get_base_models).put(search_prefs::put_base_models))
         .route("/civitai/models/{id}", get(civitai_api::model))
         .route("/download-targets", get(civitai_api::targets))
         .route("/downloads", get(civitai_api::list).post(civitai_api::enqueue))

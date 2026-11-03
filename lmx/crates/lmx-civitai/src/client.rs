@@ -92,7 +92,12 @@ pub struct CivitaiClient {
     key: Option<String>,
     limiter: Limiter,
     cache: Mutex<HashMap<String, (Instant, Value)>>,
+    /// Sorted-search pools: key -> (built at, trimmed items, capped).
+    pools: Mutex<HashMap<String, PoolEntry>>,
+    pool_lock: tokio::sync::Mutex<()>,
 }
+
+type PoolEntry = (Instant, std::sync::Arc<Vec<Value>>, bool);
 
 impl CivitaiClient {
     pub fn new(host: &str, key: Option<String>) -> anyhow::Result<CivitaiClient> {
@@ -110,6 +115,8 @@ impl CivitaiClient {
             key: key.filter(|k| !k.trim().is_empty()),
             limiter: Limiter::new(Duration::from_millis(250)),
             cache: Mutex::new(HashMap::new()),
+            pools: Mutex::new(HashMap::new()),
+            pool_lock: tokio::sync::Mutex::new(()),
         })
     }
 
@@ -138,11 +145,17 @@ impl CivitaiClient {
     }
 
     async fn get_json(&self, path: &str, query: &[(String, String)], auth: bool) -> Result<Value, CivitaiError> {
+        self.get_json_opt(path, query, auth, true).await
+    }
+
+    async fn get_json_opt(&self, path: &str, query: &[(String, String)], auth: bool, use_cache: bool) -> Result<Value, CivitaiError> {
         let url = reqwest::Url::parse_with_params(&format!("{}{}", self.api_base, path), query)
             .map_err(|e| CivitaiError::Decode(e.to_string()))?;
         let cache_key = format!("{}|{}", auth, url);
-        if let Some(v) = self.cached(&cache_key) {
-            return Ok(v);
+        if use_cache {
+            if let Some(v) = self.cached(&cache_key) {
+                return Ok(v);
+            }
         }
         self.limiter.wait().await;
         let mut req = self.http.get(url).timeout(Duration::from_secs(25)).header("Accept", "application/json");
@@ -160,8 +173,68 @@ impl CivitaiClient {
             return Err(CivitaiError::Http(status.as_u16(), body.chars().take(200).collect()));
         }
         let v: Value = res.json().await.map_err(|e| CivitaiError::Decode(e.to_string()))?;
-        self.store(cache_key, &v);
+        if use_cache {
+            self.store(cache_key, &v);
+        }
         Ok(v)
+    }
+
+    /// Relevance-ranked results for a keyword search, up to `max`, trimmed for cards.
+    /// Cached for [`CACHE_TTL`] so paging through a sorted pool costs nothing.
+    /// Returns (items, capped) where `capped` means Civitai had more than `max`.
+    pub async fn search_pool(&self, p: &SearchParams, max: usize) -> Result<(std::sync::Arc<Vec<Value>>, bool), CivitaiError> {
+        let mut base = p.clone();
+        base.sort = None;
+        base.cursor = None;
+        base.limit = 100;
+        let key = format!("{:?}", base.to_query());
+        let _build = self.pool_lock.lock().await;
+        {
+            let pools = self.pools.lock().expect("pool lock");
+            if let Some((t, items, capped)) = pools.get(&key) {
+                if t.elapsed() < CACHE_TTL {
+                    return Ok((items.clone(), *capped));
+                }
+            }
+        }
+        let mut items: Vec<Value> = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        let mut cursor: Option<String> = None;
+        let capped = loop {
+            let mut q = base.clone();
+            q.cursor = cursor.clone();
+            let page = self.get_json_opt("/models", &q.to_query(), q.favorites, false).await?;
+            for m in page.get("items").and_then(Value::as_array).into_iter().flatten() {
+                if seen.insert(m.get("id").and_then(Value::as_i64).unwrap_or(-1)) {
+                    items.push(crate::resort::trim_model(m));
+                }
+            }
+            cursor = match page.pointer("/metadata/nextCursor") {
+                Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
+                Some(Value::Number(n)) => Some(n.to_string()),
+                _ => None,
+            };
+            if cursor.is_none() {
+                break false;
+            }
+            if items.len() >= max {
+                items.truncate(max);
+                break true;
+            }
+        };
+        let items = std::sync::Arc::new(items);
+        let mut pools = self.pools.lock().expect("pool lock");
+        pools.retain(|_, (t, _, _)| t.elapsed() < CACHE_TTL);
+        if pools.len() >= 8 {
+            pools.clear();
+        }
+        pools.insert(key, (Instant::now(), items.clone(), capped));
+        Ok((items, capped))
+    }
+
+    /// `/enums` (model types, base models). Not cached here; callers keep their own copy.
+    pub async fn enums(&self) -> Result<Value, CivitaiError> {
+        self.get_json_opt("/enums", &[], false, false).await
     }
 
     pub async fn search(&self, p: &SearchParams) -> Result<Value, CivitaiError> {

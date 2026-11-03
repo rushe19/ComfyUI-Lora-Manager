@@ -252,6 +252,17 @@ export interface CivSearchPage {
   items: CivCard[]
   next_cursor: string | number | null
   has_key: boolean
+  /** Set when lmx sorted a keyword search itself (Civitai ignores sort with a keyword). */
+  resorted: { pool: number; capped: boolean } | null
+}
+
+export interface BaseModelPrefs {
+  all: string[]
+  selected: string[]
+  new: string[]
+  local: { name: string; count: number }[]
+  fetched_at: number | null
+  error: string | null
 }
 
 export type JobStatus = 'queued' | 'running' | 'done' | 'failed' | 'canceled'
@@ -422,3 +433,6 @@ export const metadataPreview = (t: MetaTarget) => send<MetaPreview>('POST', '/ap
 export const startMetadata = (t: MetaTarget) => send<{ job: MetaJob }>('POST', '/api/metadata/fetch', t)
 export const metadataJob = () => send<{ job: MetaJob | null }>('GET', '/api/metadata/job')
 export const cancelMetadata = () => send<{ canceling: boolean }>('DELETE', '/api/metadata/job')
+
+export const fetchBaseModelPrefs = () => send<BaseModelPrefs>('GET', '/api/civitai/base-models')
+export const saveBaseModelPrefs = (selected: string[]) => send<BaseModelPrefs>('PUT', '/api/civitai/base-models', { selected })

@@ -34,6 +34,7 @@ pub struct AppState {
     pub meta: crate::metadata::MetaJobs,
     /// Serializes sidecar writes made by lmx (edits, metadata job, moves).
     pub writes: tokio::sync::Mutex<()>,
+    pub search: crate::search_prefs::SearchState,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -69,6 +70,7 @@ impl AppState {
             archive: RwLock::new(None),
             meta: Default::default(),
             writes: tokio::sync::Mutex::new(()),
+            search: Default::default(),
         }))
     }
 
