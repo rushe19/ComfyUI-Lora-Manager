@@ -63,6 +63,9 @@ pub struct Config {
     /// Host used for "open on Civitai" links (e.g. civitai.red for mature content).
     #[serde(default = "default_civitai_host")]
     pub civitai_host: String,
+    /// Override for the API base URL (tests / mirrors). Defaults to `https://{civitai_host}/api/v1`.
+    #[serde(default)]
+    pub civitai_api_base: Option<String>,
     /// Civitai API key (falls back to LoRA Manager's `civitai_api_key` when `lm_settings` is set).
     #[serde(default, skip_serializing)]
     pub civitai_api_key: Option<String>,
@@ -93,6 +96,7 @@ impl Default for Config {
             lm_settings: None,
             scan_threads: default_scan_threads(),
             civitai_host: default_civitai_host(),
+            civitai_api_base: None,
             civitai_api_key: None,
             download_concurrency: default_download_concurrency(),
             data_dir: PathBuf::from("data"),

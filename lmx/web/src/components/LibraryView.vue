@@ -5,6 +5,8 @@ import { isOpen, openOverlay, closeOverlay } from '../overlay'
 import ModelGrid from './ModelGrid.vue'
 import DetailSheet from './DetailSheet.vue'
 
+const props = defineProps<{ active?: boolean }>()
+
 const TYPES: { id: ModelType; label: string }[] = [
   { id: 'lora', label: 'LoRA' },
   { id: 'checkpoint', label: 'Checkpoint' },
@@ -129,11 +131,27 @@ function openFilters() {
 
 async function refreshCounts() {
   try {
-    counts.value = (await fetchStatus()).counts
+    const st = await fetchStatus()
+    const changed = lastTotal !== null && st.total !== lastTotal
+    lastTotal = st.total
+    counts.value = st.counts
+    return changed
   } catch {
-    /* status is optional */
+    return false
   }
 }
+let lastTotal: number | null = null
+
+// Coming back to the library (e.g. after a download): reload if the library changed.
+watch(
+  () => props.active,
+  async (a) => {
+    if (a && (await refreshCounts())) {
+      reset()
+      void loadFacets()
+    }
+  },
+)
 
 onMounted(() => {
   reset()

@@ -133,20 +133,20 @@ pub struct EnqueueBody {
 /// Build a job from a `/models/{id}` payload.
 pub fn build_job(st: &AppState, model: &Value, version_id: Option<i64>, file_id: Option<i64>, root: Option<&str>, folder: &str) -> anyhow::Result<DownloadJob> {
     let version = match version_id {
-        Some(v) => map::find_version(model, v).ok_or_else(|| anyhow::anyhow!("version {v} not found"))?,
+        Some(v) => map::find_version(model, v).ok_or_else(|| anyhow::anyhow!("バージョン {v} が見つかりません"))?,
         None => model
             .get("modelVersions")
             .and_then(Value::as_array)
             .and_then(|a| a.first())
-            .ok_or_else(|| anyhow::anyhow!("model has no versions"))?,
+            .ok_or_else(|| anyhow::anyhow!("このモデルにはバージョンがありません"))?,
     };
     let file = match file_id {
         Some(f) => version
             .get("files")
             .and_then(Value::as_array)
             .and_then(|fs| fs.iter().find(|x| x.get("id").and_then(Value::as_i64) == Some(f)))
-            .ok_or_else(|| anyhow::anyhow!("file {f} not found"))?,
-        None => map::default_file(version).ok_or_else(|| anyhow::anyhow!("version has no files"))?,
+            .ok_or_else(|| anyhow::anyhow!("ファイル {f} が見つかりません"))?,
+        None => map::default_file(version).ok_or_else(|| anyhow::anyhow!("このバージョンにはファイルがありません"))?,
     };
     let ctype = model.get("type").and_then(Value::as_str).unwrap_or("");
     let t = map::lmx_type(ctype);
@@ -155,7 +155,7 @@ pub fn build_job(st: &AppState, model: &Value, version_id: Option<i64>, file_id:
         .get("downloadUrl")
         .and_then(Value::as_str)
         .or_else(|| version.get("downloadUrl").and_then(Value::as_str))
-        .ok_or_else(|| anyhow::anyhow!("no download url"))?;
+        .ok_or_else(|| anyhow::anyhow!("ダウンロード URL がありません"))?;
     let image = version
         .get("images")
         .and_then(Value::as_array)

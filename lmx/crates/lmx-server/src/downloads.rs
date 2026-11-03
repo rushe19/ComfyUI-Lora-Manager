@@ -80,7 +80,7 @@ impl Downloads {
         {
             let jobs = self.jobs.lock().expect("jobs lock");
             if let Some(dup) = jobs.iter().find(|j| j.status.is_active() && j.version_id == job.version_id && j.file_id == job.file_id) {
-                anyhow::bail!("already queued (job {})", dup.id);
+                anyhow::bail!("既にダウンロード待ちです（ジョブ {}）", dup.id);
             }
         }
         job.created_at = now();
@@ -258,6 +258,9 @@ async fn download(state: &Arc<AppState>, id: i64, live: &Live) -> anyhow::Result
     // Resume from an existing partial file.
     let (mut hasher, mut have) = if part.exists() { hash_existing(&part).await? } else { (Sha256::new(), 0) };
     let res = state.civitai.download(&job.url, have).await?;
+    if have > 0 {
+        tracing::info!("download {id}: resume at {have} bytes -> HTTP {}", res.status().as_u16());
+    }
     let mut file = if have > 0 && res.status().as_u16() == 206 {
         tokio::fs::OpenOptions::new().append(true).open(&part).await?
     } else {
@@ -315,7 +318,9 @@ async fn download(state: &Arc<AppState>, id: i64, live: &Live) -> anyhow::Result
         }),
         None => None,
     };
-    if let Err(e) = write_sidecar(&job, &dest, &digest, preview.as_deref()).await {
+    // /model-versions/{id} carries more than the /models payload (image generation meta, creator): prefer it.
+    let full_version = state.civitai.version(job.version_id).await.ok();
+    if let Err(e) = write_sidecar(&job, &dest, &digest, preview.as_deref(), full_version).await {
         tracing::warn!("sidecar for {}: {e}", dest.display());
     }
     Ok(Outcome::Done(dest))
@@ -344,13 +349,15 @@ async fn save_preview(state: &AppState, url: &str, model: &Path) -> anyhow::Resu
     Ok(Some(paths::norm(&path)))
 }
 
-async fn write_sidecar(job: &DownloadJob, model: &Path, sha: &str, preview: Option<&str>) -> anyhow::Result<()> {
+async fn write_sidecar(job: &DownloadJob, model: &Path, sha: &str, preview: Option<&str>, full_version: Option<Value>) -> anyhow::Result<()> {
     let side = paths::sidecar_path(model);
     if side.exists() {
         return Ok(());
     }
     let meta = job.meta.clone().unwrap_or(Value::Null);
-    let version = meta.get("version").cloned().unwrap_or(Value::Null);
+    let version = full_version
+        .filter(|v| v.get("id").and_then(Value::as_i64) == Some(job.version_id))
+        .unwrap_or_else(|| meta.get("version").cloned().unwrap_or(Value::Null));
     let model_json = meta.get("model").cloned().unwrap_or(Value::Null);
     let file = version
         .get("files")

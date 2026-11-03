@@ -45,7 +45,10 @@ impl AppState {
         let records: Vec<_> = store.load()?.into_values().collect();
         let thumbs_dir = cfg.data_dir.join("thumbs");
         std::fs::create_dir_all(&thumbs_dir)?;
-        let civitai = lmx_civitai::CivitaiClient::new(&cfg.civitai_host, cfg.civitai_api_key.clone())?;
+        let civitai = match &cfg.civitai_api_base {
+            Some(base) => lmx_civitai::CivitaiClient::with_api_base(base, cfg.civitai_api_key.clone())?,
+            None => lmx_civitai::CivitaiClient::new(&cfg.civitai_host, cfg.civitai_api_key.clone())?,
+        };
         let downloads = crate::downloads::Downloads::open(&cfg.data_dir.join("downloads.sqlite"))?;
         Ok(Arc::new(AppState {
             library: RwLock::new(Arc::new(Library::new(records))),

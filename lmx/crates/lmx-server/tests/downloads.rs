@@ -31,6 +31,13 @@ async fn env(name: &str) -> Env {
     let blob: Vec<u8> = (0..300_000u32).map(|i| (i * 7 % 251) as u8).collect();
     std::fs::write(served.join("blob.safetensors"), &blob).unwrap();
     std::fs::write(served.join("preview.jpg"), [0xFFu8, 0xD8, 0xFF, 0xE0, 1, 2, 3]).unwrap();
+    // The richer /model-versions payload used for the sidecar.
+    std::fs::create_dir_all(served.join("api/v1/model-versions")).unwrap();
+    std::fs::copy(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lmx-civitai/tests/fixtures/version.json"),
+        served.join("api/v1/model-versions/1336431"),
+    )
+    .unwrap();
 
     // ServeDir answers Range requests with 206, like Civitai's storage.
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -41,6 +48,7 @@ async fn env(name: &str) -> Env {
         roots: Roots { lora: vec![root.clone()], ..Default::default() },
         scan_threads: 2,
         data_dir: base.join("data"),
+        civitai_api_base: Some(format!("http://{addr}/api/v1")),
         ..Default::default()
     };
     std::fs::create_dir_all(&cfg.data_dir).unwrap();
@@ -83,6 +91,9 @@ async fn resumes_partial_file_verifies_hash_and_writes_sidecar_and_preview() {
     assert_eq!(side["civitai"]["modelId"], job.model_id);
     assert!(side["preview_url"].as_str().unwrap().ends_with("frieren_test.preview.jpeg"));
     assert!(e.root.join("New/Sub/frieren_test.preview.jpeg").exists());
+    // Enriched from /model-versions: example images keep their generation meta.
+    assert!(side["civitai"]["images"].as_array().unwrap().iter().any(|i| i.get("meta").is_some()), "image meta missing");
+    assert_eq!(side["civitai"]["model"]["name"].as_str().is_some(), true);
 }
 
 #[tokio::test(flavor = "multi_thread")]

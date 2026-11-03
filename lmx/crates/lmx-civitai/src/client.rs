@@ -96,13 +96,17 @@ pub struct CivitaiClient {
 
 impl CivitaiClient {
     pub fn new(host: &str, key: Option<String>) -> anyhow::Result<CivitaiClient> {
+        Self::with_api_base(&format!("https://{host}/api/v1"), key)
+    }
+
+    pub fn with_api_base(api_base: &str, key: Option<String>) -> anyhow::Result<CivitaiClient> {
         let http = reqwest::Client::builder()
             .user_agent(concat!("lmx/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(Duration::from_secs(15))
             .build()?;
         Ok(CivitaiClient {
             http,
-            api_base: format!("https://{host}/api/v1"),
+            api_base: api_base.trim_end_matches('/').to_string(),
             key: key.filter(|k| !k.trim().is_empty()),
             limiter: Limiter::new(Duration::from_millis(250)),
             cache: Mutex::new(HashMap::new()),
