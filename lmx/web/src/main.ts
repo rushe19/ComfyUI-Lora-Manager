@@ -1,7 +1,9 @@
 import { createApp } from 'vue'
 import App from './App.vue'
+import { applyTheme, prefs } from './prefs'
 import './styles.css'
 
+applyTheme(prefs.theme)
 createApp(App).mount('#app')
 
 // Service workers only register on secure origins (https or localhost).

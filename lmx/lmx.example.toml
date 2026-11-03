@@ -1,0 +1,16 @@
+# lmx configuration. Copy to data/lmx.toml and edit.
+
+# Import model roots from an existing LoRA Manager settings.json (read-only).
+# lm_settings = "C:/path/to/ComfyUI-Lora-Manager/settings.json"
+
+# Host for "open on Civitai" links. civitai.red shows mature content.
+civitai_host = "civitai.com"
+
+# Parallel workers for reading sidecars during a scan.
+scan_threads = 16
+
+[roots]
+lora = []
+checkpoint = []
+embedding = []
+other = []

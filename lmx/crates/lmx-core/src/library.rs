@@ -41,6 +41,8 @@ pub struct Query {
     /// Include subfolders of `folder`.
     pub recursive: bool,
     pub favorites_only: bool,
+    /// Only models whose sidecar is damaged or unreadable.
+    pub damaged_only: bool,
     pub include_excluded: bool,
     pub sort: SortKey,
     pub descending: bool,
@@ -125,6 +127,9 @@ impl Library {
             return false;
         }
         if q.favorites_only && !r.favorite {
+            return false;
+        }
+        if q.damaged_only && r.damage.is_none() && r.sidecar_error.is_none() {
             return false;
         }
         if !q.base_models.is_empty() && !q.base_models.iter().any(|b| b.eq_ignore_ascii_case(&r.base_model)) {
@@ -245,6 +250,8 @@ mod tests {
         let mut b = rec(2, "beta", "Char/Sub", "Pony", 10, 1.0);
         b.favorite = true;
         let c = rec(3, "Gamma", "", "Illustrious", 20, 2.0);
+        let mut c = c;
+        c.damage = Some(crate::sidecar::Damage::TrailingData);
         let mut x = rec(4, "Hidden", "", "Illustrious", 5, 9.0);
         x.exclude = true;
         let mut ck = rec(5, "Ckpt", "", "SDXL", 1, 1.0);
@@ -284,6 +291,8 @@ mod tests {
         assert_eq!(names(&rec.0), vec!["Alpha", "beta"]);
         let fav = l.query(&Query { favorites_only: true, ..Default::default() });
         assert_eq!(names(&fav.0), vec!["beta"]);
+        let dmg = l.query(&Query { damaged_only: true, ..Default::default() });
+        assert_eq!(names(&dmg.0), vec!["Gamma"]);
         let tag = l.query(&Query { tag: Some("GIRL".into()), ..Default::default() });
         assert_eq!(names(&tag.0), vec!["Alpha"]);
     }
