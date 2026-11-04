@@ -286,3 +286,8 @@ button.danger.small, button.small { padding: 4px 8px; font-size: 12px; border-ra
 .bm-list .check { font-size: 13px; }
 .badge.new { background: var(--accent); color: var(--accent-fg); }
 .chip.more { border-style: dashed; }
+
+/* Download restrictions (early access / Buzz) */
+.thumb .access { position: absolute; left: 6px; top: 6px; font-size: 10px; padding: 1px 6px; border-radius: 6px; color: #fff; max-width: calc(100% - 64px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.thumb .access.early, .badge.early { background: #d97706; color: #fff; }
+.thumb .access.paid, .badge.paid { background: #dc2626; color: #fff; }

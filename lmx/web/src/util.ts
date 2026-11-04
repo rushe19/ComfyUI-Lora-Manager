@@ -73,3 +73,32 @@ export async function copyText(text: string): Promise<boolean> {
 
 /** Civitai NSFW levels: 1 PG, 2 PG-13, 4 R, 8 X, 16 XXX. Blur from R upwards. */
 export const isMature = (level: number) => level >= 4
+
+/** Civitai ISO timestamp -> local `YYYY/MM/DD` (with time when asked). */
+export function formatIsoDate(iso: string | null | undefined, withTime = false): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const p = (n: number) => String(n).padStart(2, '0')
+  const date = `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())}`
+  return withTime ? `${date} ${p(d.getHours())}:${p(d.getMinutes())}` : date
+}
+
+/** Time left until `iso`: "あと3日" / "あと5時間" / "あと20分" ('' when past). */
+export function timeLeft(iso: string | null | undefined, now = Date.now()): string {
+  if (!iso) return ''
+  const ms = new Date(iso).getTime() - now
+  if (!(ms > 0)) return ''
+  const h = ms / 3_600_000
+  if (h >= 24) return `あと${Math.floor(h / 24)}日`
+  if (h >= 1) return `あと${Math.floor(h)}時間`
+  return `あと${Math.max(1, Math.floor(ms / 60_000))}分`
+}
+
+/** Short badge text for a download restriction. */
+export function accessBadge(a: { kind: 'early' | 'paid'; ends_at: string | null } | null | undefined, now = Date.now()): string {
+  if (!a) return ''
+  if (a.kind === 'paid') return '要Buzz'
+  const left = timeLeft(a.ends_at, now)
+  return left ? `先行公開 ${left}` : '先行公開'
+}

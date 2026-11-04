@@ -193,8 +193,18 @@ export interface CivCard {
   versions: number
   owned_versions: number
   queued: boolean
+  /** Restriction of the newest version; null = free to download. */
+  access: CivAccess | null
+  free_versions: number
+  published_at: string | null
   image: CivImage | null
   url: string
+}
+
+export interface CivAccess {
+  /** early = early access (Buzz until ends_at, free afterwards); paid = Buzz purchase required. */
+  kind: 'early' | 'paid'
+  ends_at: string | null
 }
 
 export interface CivFile {
@@ -215,6 +225,7 @@ export interface CivVersion {
   base_model: string
   published_at: string | null
   availability: string | null
+  access: CivAccess | null
   trained_words: string[]
   downloads: number
   owned_local_id: number | null
@@ -234,6 +245,8 @@ export interface CivModel {
   tags: string[]
   description: string
   url: string
+  first_published_at: string | null
+  last_published_at: string | null
   versions: CivVersion[]
 }
 

@@ -5,7 +5,7 @@ import { closeOverlay, isOpen, openOverlay } from '../overlay'
 import { prefs } from '../prefs'
 import { normalizeFolder, rememberTarget, type Target } from '../targets'
 import { toast } from '../toast'
-import { formatSize, htmlToText, isMature } from '../util'
+import { accessBadge, formatIsoDate, formatSize, htmlToText, isMature, timeLeft } from '../util'
 import TargetPicker from './TargetPicker.vue'
 
 const props = defineProps<{ id: number }>()
@@ -80,6 +80,8 @@ const jobLabel: Record<string, string> = { queued: '待機中', running: 'ダウ
             <span class="chip">{{ m.type }}</span>
             <span v-if="m.creator" class="chip">by {{ m.creator }}</span>
             <span v-if="m.nsfw" class="chip warn">NSFW</span>
+            <span v-if="m.first_published_at" class="chip">初公開 {{ formatIsoDate(m.first_published_at) }}</span>
+            <span v-if="m.last_published_at && formatIsoDate(m.last_published_at) !== formatIsoDate(m.first_published_at)" class="chip">最終更新 {{ formatIsoDate(m.last_published_at) }}</span>
             <a class="chip" :href="m.url" target="_blank" rel="noopener noreferrer">Civitai で開く ↗</a>
           </div>
 
@@ -89,6 +91,7 @@ const jobLabel: Record<string, string> = { queued: '待機中', running: 'ダウ
               {{ v.name }}<small> {{ v.base_model }}</small>
               <span v-if="v.owned_local_id" class="badge ok">所持</span>
               <span v-else-if="v.job" class="badge">{{ jobLabel[v.job] ?? v.job }}</span>
+              <span v-else-if="v.access" class="badge" :class="v.access.kind">{{ accessBadge(v.access) }}</span>
             </button>
           </div>
 
@@ -100,7 +103,14 @@ const jobLabel: Record<string, string> = { queued: '待機中', running: 'ダウ
               </template>
             </div>
 
+            <p class="hint">公開日 {{ formatIsoDate(version.published_at, true) || '不明' }}<template v-if="version.downloads"> ・ ⇩ {{ version.downloads.toLocaleString() }}</template></p>
             <p v-if="version.owned_local_id" class="ok-box">このバージョンはライブラリにあります。</p>
+            <p v-else-if="version.access?.kind === 'early'" class="warn-box">
+              先行公開中です。{{ formatIsoDate(version.access.ends_at, true) }} まで（{{ timeLeft(version.access.ends_at) }}）はダウンロードに Buzz での購入が必要で、その後は無料になります。Civitai で購入済みならそのままダウンロードできます。
+            </p>
+            <p v-else-if="version.access?.kind === 'paid'" class="warn-box">
+              このバージョンのダウンロードには Buzz での購入が必要です（期限なし。価格は Civitai のページで確認してください）。Civitai で購入済みならそのままダウンロードできます。
+            </p>
             <p v-if="version.availability && version.availability !== 'Public'" class="warn-box">公開状態: {{ version.availability }}（API キーやアクセス権が必要な場合があります）</p>
 
             <h4>ファイル</h4>

@@ -6,7 +6,7 @@ import { closeOverlay, isOpen, openOverlay } from '../overlay'
 import { prefs } from '../prefs'
 import { normalizeFolder, rememberTarget, type Target } from '../targets'
 import { toast } from '../toast'
-import { isMature } from '../util'
+import { accessBadge, formatIsoDate, isMature } from '../util'
 import CivitaiModelSheet from './CivitaiModelSheet.vue'
 import TargetPicker from './TargetPicker.vue'
 
@@ -195,9 +195,12 @@ const urlCount = computed(() => urlText.value.split('\n').filter((l) => l.trim()
             <span class="base">{{ c.base_models.join(' / ') || c.type }}</span>
             <span v-if="c.owned_versions" class="owned">所持 {{ c.owned_versions }}/{{ c.versions }}</span>
             <span v-else-if="c.queued" class="owned queued">DL 待ち</span>
+            <span v-if="c.access" class="access" :class="c.access.kind" :title="c.free_versions ? '旧バージョンは無料でダウンロードできます' : ''">
+              {{ accessBadge(c.access) }}<template v-if="c.free_versions"> ・旧版無料</template>
+            </span>
           </div>
           <div class="caption">{{ c.name }}</div>
-          <div class="sub">♥ {{ c.thumbs_up.toLocaleString() }} ・ ⇩ {{ c.downloads.toLocaleString() }}</div>
+          <div class="sub">♥ {{ c.thumbs_up.toLocaleString() }} ・ ⇩ {{ c.downloads.toLocaleString() }}<template v-if="c.published_at"> ・ {{ formatIsoDate(c.published_at) }}</template></div>
         </button>
       </div>
       <div ref="sentinel" class="sentinel"></div>

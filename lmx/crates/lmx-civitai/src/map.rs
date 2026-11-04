@@ -78,6 +78,49 @@ fn image_view(img: &Value, width: u32) -> Value {
     })
 }
 
+/// Current UTC time as `YYYY-MM-DDTHH:MM:SS`, comparable with Civitai timestamps by prefix.
+pub fn now_iso() -> String {
+    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    iso_from_unix(secs)
+}
+
+pub fn iso_from_unix(secs: u64) -> String {
+    let days = (secs / 86400) as i64;
+    let rem = secs % 86400;
+    // Civil-from-days (Howard Hinnant).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}", rem / 3600, rem % 3600 / 60, rem % 60)
+}
+
+/// Download restriction of a version, or null when anyone can download it.
+/// `paidAccess: {permanent: true}` = Buzz purchase required for good;
+/// `{permanent: false, endsAt}` = early access, paid until `endsAt`, free afterwards.
+pub fn access(v: &Value, now: &str) -> Value {
+    let future = |t: &str| t.len() >= 19 && now.len() >= 19 && t[..19] > now[..19];
+    if let Some(pa) = v.get("paidAccess").filter(|p| p.is_object()) {
+        if pa.get("permanent").and_then(Value::as_bool).unwrap_or(false) {
+            return json!({ "kind": "paid", "ends_at": null });
+        }
+        match pa.get("endsAt").and_then(Value::as_str) {
+            Some(t) if future(t) => return json!({ "kind": "early", "ends_at": t }),
+            Some(_) => return Value::Null,
+            None => {}
+        }
+    }
+    match v.get("earlyAccessDeadline").and_then(Value::as_str) {
+        Some(t) if future(t) => json!({ "kind": "early", "ends_at": t }),
+        _ => Value::Null,
+    }
+}
+
 fn versions(model: &Value) -> &[Value] {
     model.get("modelVersions").and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&[])
 }
@@ -91,9 +134,14 @@ fn cover(model: &Value) -> Option<&Value> {
     imgs.iter().find(|i| s(i, "type") != "video").or(imgs.first()).copied()
 }
 
+fn latest_published(vs: &[Value]) -> Option<&str> {
+    vs.iter().filter_map(|v| v.get("publishedAt").and_then(Value::as_str)).max()
+}
+
 /// Compact card for search / favorites grids.
 pub fn card(model: &Value, own: &Ownership, host: &str) -> Value {
     let vs = versions(model);
+    let now = now_iso();
     let owned = vs.iter().filter(|v| own.local_for_version(v).is_some()).count();
     let queued = vs.iter().any(|v| own.job(v).is_some_and(|j| j == "queued" || j == "running"));
     let mut bases: Vec<&str> = Vec::new();
@@ -119,6 +167,10 @@ pub fn card(model: &Value, own: &Ownership, host: &str) -> Value {
         "base_models": bases.into_iter().take(3).collect::<Vec<_>>(),
         "versions": vs.len(),
         "owned_versions": owned,
+        // Restriction of the newest version (Civitai lists newest first) and how many versions are free.
+        "access": vs.first().map(|v| access(v, &now)).unwrap_or(Value::Null),
+        "free_versions": vs.iter().filter(|v| access(v, &now).is_null()).count(),
+        "published_at": latest_published(vs),
         "queued": queued,
         "image": cover(model).map(|i| image_view(i, 450)),
         "url": format!("https://{host}/models/{id}"),
@@ -128,6 +180,8 @@ pub fn card(model: &Value, own: &Ownership, host: &str) -> Value {
 /// Full model view with per-version and per-file ownership.
 pub fn model_view(model: &Value, own: &Ownership, host: &str) -> Value {
     let id = model.get("id").and_then(Value::as_i64).unwrap_or(0);
+    let now = now_iso();
+    let all = versions(model);
     let ctype = s(model, "type");
     let versions: Vec<Value> = versions(model)
         .iter()
@@ -159,6 +213,7 @@ pub fn model_view(model: &Value, own: &Ownership, host: &str) -> Value {
                 "base_model": s(v, "baseModel"),
                 "published_at": v.get("publishedAt").cloned().unwrap_or(Value::Null),
                 "availability": v.get("availability").cloned().unwrap_or(Value::Null),
+                "access": access(v, &now),
                 "trained_words": v.get("trainedWords").cloned().unwrap_or(json!([])),
                 "downloads": v.pointer("/stats/downloadCount").and_then(Value::as_i64).unwrap_or(0),
                 "owned_local_id": own.local_for_version(v),
@@ -179,6 +234,8 @@ pub fn model_view(model: &Value, own: &Ownership, host: &str) -> Value {
         "tags": model.get("tags").cloned().unwrap_or(json!([])),
         "description": s(model, "description"),
         "url": format!("https://{host}/models/{id}"),
+        "first_published_at": all.iter().filter_map(|v| v.get("publishedAt").and_then(Value::as_str)).min(),
+        "last_published_at": latest_published(all),
         "versions": versions,
     })
 }
@@ -362,5 +419,44 @@ mod tests {
         assert!(civ.get("files").is_some() && civ.get("images").is_some());
         // creator is appended last, like LoRA Manager's sidecars
         assert_eq!(civ.keys().last().unwrap(), "creator");
+    }
+}
+
+#[cfg(test)]
+mod access_tests {
+    use super::*;
+
+    const NOW: &str = "2026-11-04T09:00:00";
+
+    #[test]
+    fn classifies_paid_access() {
+        assert_eq!(access(&json!({"paidAccess": {"permanent": true, "endsAt": null}}), NOW)["kind"], "paid");
+        let ea = access(&json!({"paidAccess": {"permanent": false, "endsAt": "2026-11-08T23:28:12.560Z"}}), NOW);
+        assert_eq!(ea["kind"], "early");
+        assert_eq!(ea["ends_at"], "2026-11-08T23:28:12.560Z");
+        assert!(access(&json!({"paidAccess": {"permanent": false, "endsAt": "2026-11-01T00:00:00.000Z"}}), NOW).is_null(), "ended early access is free");
+        assert!(access(&json!({"paidAccess": null, "earlyAccessDeadline": null}), NOW).is_null());
+        assert_eq!(access(&json!({"earlyAccessDeadline": "2026-11-05T00:00:00.000Z"}), NOW)["kind"], "early");
+    }
+
+    #[test]
+    fn iso_conversion() {
+        assert_eq!(iso_from_unix(0), "1970-01-01T00:00:00");
+        assert_eq!(iso_from_unix(1_709_210_096), "2024-02-29T12:34:56");
+        assert_eq!(iso_from_unix(1_793_750_400), "2026-11-04T00:00:00");
+    }
+
+    #[test]
+    fn card_reports_newest_version_restriction() {
+        let m = json!({"id": 1, "type": "LORA", "modelVersions": [
+            {"id": 11, "publishedAt": "2026-11-03T00:00:00.000Z", "paidAccess": {"permanent": false, "endsAt": "2099-01-01T00:00:00.000Z"}},
+            {"id": 10, "publishedAt": "2026-10-01T00:00:00.000Z", "paidAccess": null}]});
+        let c = card(&m, &Ownership::default(), "civitai.com");
+        assert_eq!(c["access"]["kind"], "early");
+        assert_eq!(c["free_versions"], 1);
+        assert_eq!(c["published_at"], "2026-11-03T00:00:00.000Z");
+        let v = model_view(&m, &Ownership::default(), "civitai.com");
+        assert_eq!(v["first_published_at"], "2026-10-01T00:00:00.000Z");
+        assert_eq!(v["versions"][1]["access"], Value::Null);
     }
 }

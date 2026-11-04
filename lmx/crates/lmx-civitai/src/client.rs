@@ -267,7 +267,7 @@ impl CivitaiClient {
         let res = req.send().await.map_err(|e| CivitaiError::Network(e.to_string()))?;
         let status = res.status();
         if status.as_u16() == 401 || status.as_u16() == 403 {
-            return Err(if self.key.is_none() { CivitaiError::NeedsKey } else { CivitaiError::Http(status.as_u16(), "access denied".into()) });
+            return Err(if self.key.is_none() { CivitaiError::NeedsKey } else { CivitaiError::Http(status.as_u16(), "ダウンロードの権限がありません（先行公開中か、Buzz での購入が必要なモデルの可能性があります。Civitai で購入済みか確認してください）".into()) });
         }
         if !status.is_success() {
             let body = res.text().await.unwrap_or_default();

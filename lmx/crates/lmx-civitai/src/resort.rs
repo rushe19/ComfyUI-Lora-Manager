@@ -66,6 +66,8 @@ pub fn trim_model(m: &Value) -> Value {
                         "id": v.get("id").cloned().unwrap_or(Value::Null),
                         "baseModel": v.get("baseModel").cloned().unwrap_or(Value::Null),
                         "publishedAt": v.get("publishedAt").cloned().unwrap_or(Value::Null),
+                        "paidAccess": v.get("paidAccess").cloned().unwrap_or(Value::Null),
+                        "earlyAccessDeadline": v.get("earlyAccessDeadline").cloned().unwrap_or(Value::Null),
                         "files": files,
                         "images": images,
                     })

@@ -21,3 +21,12 @@
 - 設定と検索画面は同じリアクティブなストアを見ているので、リロードは不要。
 
 API: `GET /api/civitai/base-models` → `{ all, selected, new, local, fetched_at, error }`、`PUT /api/civitai/base-models { selected }`。
+
+## 先行公開・Buzz が必要なモデル
+
+- Civitai v1 のバージョンにある `paidAccess` で判定する（2026-11 実測）。
+  - `{ "permanent": true, "endsAt": null }` → ダウンロードにずっと Buzz での購入が必要（「要Buzz」）。
+  - `{ "permanent": false, "endsAt": "<日時>" }` → 先行公開。`endsAt` までは Buzz が必要で、その後は無料（「先行公開 あと N 日」）。`endsAt` を過ぎたものは無料扱い。
+  - `earlyAccessDeadline` も同じ日時を持つので、`paidAccess` が無いときの予備に使う。
+- 価格は公開 API に出てこない。キー無しでダウンロードすると、要Buzz は 403、先行公開は 401 になる。
+- カードには最新バージョンの状態と、無料のバージョン数（「旧版無料」）を出す。詳細では初公開日・最終更新日・各バージョンの公開日を出す。
