@@ -103,7 +103,7 @@ function openViewer(start: number) {
     items: d.value.images.map((i) => ({ url: viewerUrl(i.url, i.type === 'video'), video: i.type === 'video', nsfw: i.nsfw_level ?? 0 })),
     start,
   }
-  openOverlay('viewer')
+  openOverlay('viewer-detail')
 }
 async function copy(text: string, label: string) {
   toast((await copyText(text)) ? `${label}をコピーしました` : 'コピーできませんでした')
@@ -219,7 +219,7 @@ async function copy(text: string, label: string) {
       <EditPanel v-if="d && isOpen('edit')" :d="d" @saved="onSaved" @close="closeOverlay" />
       <MovePanel v-if="d && isOpen('move')" :d="d" @moved="onMoved" @close="closeOverlay" />
     </article>
-    <MediaViewer v-if="viewer && isOpen('viewer')" :items="viewer.items" :start="viewer.start" @close="closeOverlay" />
+    <MediaViewer v-if="viewer && isOpen('viewer-detail')" :items="viewer.items" :start="viewer.start" @close="closeOverlay" />
     <CivitaiModelSheet v-if="isOpen('update-civ') && d?.civitai_model_id" :id="d.civitai_model_id" @close="closeOverlay" @queued="emit('changed')" />
   </div>
 </template>

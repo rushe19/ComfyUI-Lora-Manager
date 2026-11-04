@@ -71,7 +71,7 @@ function openViewer(start: number) {
     items: imgs.map((i) => ({ url: viewerUrl(i.full || i.url, i.type === 'video'), video: i.type === 'video', nsfw: i.nsfw_level })),
     start,
   }
-  openOverlay('viewer')
+  openOverlay('viewer-civ')
 }
 async function copyCreator(name: string) {
   toast((await copyText(name)) ? '作者名をコピーしました' : 'コピーできませんでした')
@@ -173,5 +173,6 @@ const jobLabel: Record<string, string> = { queued: '待機中', running: 'ダウ
         </div>
       </div>
     </article>
+    <MediaViewer v-if="viewer && isOpen('viewer-civ')" :items="viewer.items" :start="viewer.start" @close="closeOverlay" />
   </div>
 </template>
