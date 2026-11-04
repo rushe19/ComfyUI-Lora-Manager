@@ -5,9 +5,10 @@ import { trashWithUndo } from '../actions'
 import { closeOverlay, isOpen, openOverlay } from '../overlay'
 import { prefs } from '../prefs'
 import { toast } from '../toast'
-import { accessBadge, copyText, formatDate, formatIsoDate, formatSize, htmlToText, isMature } from '../util'
+import { accessBadge, copyText, formatDate, formatIsoDate, formatSize, htmlToText, isMature, viewerUrl } from '../util'
 import CivitaiModelSheet from './CivitaiModelSheet.vue'
 import EditPanel from './EditPanel.vue'
+import MediaViewer, { type ViewerItem } from './MediaViewer.vue'
 import MovePanel from './MovePanel.vue'
 
 const props = defineProps<{ id: number }>()
@@ -95,6 +96,15 @@ async function ignore(body: { model_id?: number; version_id?: number }, label: s
   }
 }
 
+const viewer = ref<{ items: ViewerItem[]; start: number } | null>(null)
+function openViewer(start: number) {
+  if (!d.value) return
+  viewer.value = {
+    items: d.value.images.map((i) => ({ url: viewerUrl(i.url, i.type === 'video'), video: i.type === 'video', nsfw: i.nsfw_level ?? 0 })),
+    start,
+  }
+  openOverlay('viewer')
+}
 async function copy(text: string, label: string) {
   toast((await copyText(text)) ? `${label}をコピーしました` : 'コピーできませんでした')
 }
@@ -124,7 +134,7 @@ async function copy(text: string, label: string) {
             <span v-if="d.version_name" class="chip">{{ d.version_name }}</span>
             <span class="chip">{{ formatSize(d.summary.size) }}</span>
             <span class="chip">{{ formatDate(d.summary.modified) }}</span>
-            <span v-if="d.creator" class="chip">by {{ d.creator }}</span>
+            <button v-if="d.creator" class="chip" title="タップで作者名をコピー" @click="copy(d.creator, '作者名')">by {{ d.creator }}</button>
           </div>
 
           <div class="actions">
@@ -183,12 +193,13 @@ async function copy(text: string, label: string) {
           </section>
 
           <section v-if="d.images.length">
-            <h4>Civitai のサンプル画像</h4>
+            <h4>Civitai のサンプル画像 <small>（タップで拡大）</small></h4>
             <div class="strip">
-              <template v-for="img in d.images" :key="img.url">
-                <video v-if="img.type === 'video'" :src="img.url" muted playsinline loop preload="none" controls :class="{ blur: prefs.blurMature && isMature(img.nsfw_level ?? 0) }" />
+              <button v-for="(img, i) in d.images" :key="img.url" class="strip-item" :aria-label="`サンプル ${i + 1} を拡大`" @click="openViewer(i)">
+                <video v-if="img.type === 'video'" :src="img.url" muted playsinline loop preload="metadata" :class="{ blur: prefs.blurMature && isMature(img.nsfw_level ?? 0) }" />
                 <img v-else :src="img.url" loading="lazy" alt="" :class="{ blur: prefs.blurMature && isMature(img.nsfw_level ?? 0) }" />
-              </template>
+                <span v-if="img.type === 'video'" class="play-badge">▶</span>
+              </button>
             </div>
           </section>
 
@@ -208,6 +219,7 @@ async function copy(text: string, label: string) {
       <EditPanel v-if="d && isOpen('edit')" :d="d" @saved="onSaved" @close="closeOverlay" />
       <MovePanel v-if="d && isOpen('move')" :d="d" @moved="onMoved" @close="closeOverlay" />
     </article>
+    <MediaViewer v-if="viewer && isOpen('viewer')" :items="viewer.items" :start="viewer.start" @close="closeOverlay" />
     <CivitaiModelSheet v-if="isOpen('update-civ') && d?.civitai_model_id" :id="d.civitai_model_id" @close="closeOverlay" @queued="emit('changed')" />
   </div>
 </template>

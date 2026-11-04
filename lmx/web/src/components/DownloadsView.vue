@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { cancelDownload, listDownloads, retryDownload, type DownloadJob } from '../api'
 import { prefs } from '../prefs'
 import { toast } from '../toast'
-import { formatSize, isMature } from '../util'
+import { formatSize, isMature, isVideoUrl } from '../util'
 
 const jobs = ref<DownloadJob[]>([])
 const error = ref('')
@@ -64,7 +64,8 @@ const pct = (j: DownloadJob) => (j.size_bytes ? Math.min(100, Math.round((j.byte
       <h4 v-if="group.list.length">{{ group.title }}</h4>
       <ul class="jobs">
         <li v-for="j in group.list" :key="j.id" :class="j.status">
-          <img v-if="j.image_url" :src="j.image_url" alt="" :class="{ blur: prefs.blurMature && isMature(j.nsfw_level) }" />
+          <video v-if="j.image_url && isVideoUrl(j.image_url)" :src="j.image_url" muted playsinline loop autoplay :class="{ blur: prefs.blurMature && isMature(j.nsfw_level) }" />
+          <img v-else-if="j.image_url" :src="j.image_url" alt="" :class="{ blur: prefs.blurMature && isMature(j.nsfw_level) }" />
           <div class="job-body">
             <strong>{{ j.model_name }}</strong>
             <small>{{ j.version_name }} ・ {{ j.base_model }} ・ {{ label[j.status] }}</small>

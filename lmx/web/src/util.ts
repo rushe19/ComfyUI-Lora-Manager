@@ -102,3 +102,12 @@ export function accessBadge(a: { kind: 'early' | 'paid'; ends_at: string | null 
   const left = timeLeft(a.ends_at, now)
   return left ? `先行公開 ${left}` : '先行公開'
 }
+
+/** True for Civitai/other media URLs that point at a video. */
+export const isVideoUrl = (url: string) => /\.(mp4|webm)(\?|$)/i.test(url) || /\/transcode=/.test(url)
+
+/** A sharper-than-thumbnail rendition for the fullscreen viewer (Civitai CDN stills only). */
+export function viewerUrl(url: string, isVideo: boolean, width = 1280): string {
+  if (isVideo) return url
+  return url.replace(/\/(original=true|width=\d+)[^/]*\//, `/width=${width}/`)
+}

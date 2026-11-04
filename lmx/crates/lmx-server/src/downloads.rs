@@ -338,10 +338,30 @@ pub fn image_ext(bytes: &[u8]) -> Option<&'static str> {
     }
 }
 
+/// Image or video type from the first bytes: jpeg/png/webp stills, mp4 (`ftyp` box) and webm (EBML).
+pub fn media_ext(bytes: &[u8]) -> Option<&'static str> {
+    if let Some(e) = image_ext(bytes) {
+        Some(e)
+    } else if bytes.len() > 12 && &bytes[4..8] == b"ftyp" {
+        Some("mp4")
+    } else if bytes.starts_with(&[0x1A, 0x45, 0xDF, 0xA3]) {
+        Some("webm")
+    } else {
+        None
+    }
+}
+
+/// Where a preview of this type goes next to the model. LoRA Manager looks for
+/// `<stem>.preview.{jpeg,png,mp4,...}` and a plain `<stem>.webm`.
+pub fn preview_target(model: &Path, ext: &str) -> std::path::PathBuf {
+    let suffix = if ext == "webm" { ".webm".to_string() } else { format!(".preview.{ext}") };
+    paths::append(&paths::stem_path(model), &suffix)
+}
+
 async fn save_preview(state: &AppState, url: &str, model: &Path) -> anyhow::Result<Option<String>> {
     let bytes = state.civitai.fetch_bytes(url).await?;
-    let Some(ext) = image_ext(&bytes) else { return Ok(None) };
-    let path = paths::append(&paths::stem_path(model), &format!(".preview.{ext}"));
+    let Some(ext) = media_ext(&bytes) else { return Ok(None) };
+    let path = preview_target(model, ext);
     if path.exists() {
         return Ok(Some(paths::norm(&path)));
     }
@@ -394,5 +414,10 @@ mod tests {
         assert_eq!(image_ext(b"\x89PNG\r\n"), Some("png"));
         assert_eq!(image_ext(b"RIFF0000WEBPVP8 "), Some("webp"));
         assert_eq!(image_ext(b"<html>"), None);
+        assert_eq!(media_ext(b"    ftypisom   "), Some("mp4"));
+        assert_eq!(media_ext(&[0x1A, 0x45, 0xDF, 0xA3, 0x9F, 0x42, 0x86, 0x81, 1, 0x42, 0xF7, 0x81, 1]), Some("webm"));
+        assert_eq!(media_ext(b"<html><body>blocked</body></html>"), None);
+        assert_eq!(preview_target(Path::new("x/a.safetensors"), "mp4"), Path::new("x/a.preview.mp4"));
+        assert_eq!(preview_target(Path::new("x/a.safetensors"), "webm"), Path::new("x/a.webm"));
     }
 }

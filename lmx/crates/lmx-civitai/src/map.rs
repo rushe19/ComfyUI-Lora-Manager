@@ -61,6 +61,21 @@ pub fn resize_image_url(url: &str, width: u32) -> String {
     }
 }
 
+/// Small rendition used for the on-disk preview: a 450 px image, or for videos Civitai's
+/// transcoded 450 px mp4 (the same renditions LoRA Manager stores).
+pub fn preview_rendition_url(url: &str, is_video: bool) -> String {
+    if !is_video {
+        return resize_image_url(url, 450);
+    }
+    static RE: OnceLock<Regex> = OnceLock::new();
+    let re = RE.get_or_init(|| Regex::new(r"/(original=true|width=\d+|transcode=[^/]*)[^/]*/").expect("regex"));
+    if re.is_match(url) {
+        re.replace(url, "/transcode=true,width=450,optimized=true/").into_owned()
+    } else {
+        url.to_string()
+    }
+}
+
 fn s<'a>(v: &'a Value, k: &str) -> &'a str {
     v.get(k).and_then(Value::as_str).unwrap_or("")
 }
@@ -362,6 +377,10 @@ mod tests {
         let w = "https://image.civitai.com/key/uuid/width=1024/123.jpeg";
         assert_eq!(resize_image_url(w, 450), "https://image.civitai.com/key/uuid/width=450/123.jpeg");
         assert_eq!(resize_image_url("https://x/y.png", 450), "https://x/y.png");
+        let v = "https://image.civitai.com/key/uuid/original=true/clip.mp4";
+        assert_eq!(preview_rendition_url(v, true), "https://image.civitai.com/key/uuid/transcode=true,width=450,optimized=true/clip.mp4");
+        assert_eq!(preview_rendition_url(v, false), "https://image.civitai.com/key/uuid/width=450/clip.mp4");
+        assert_eq!(preview_rendition_url("https://x/y.mp4", true), "https://x/y.mp4");
     }
 
     #[test]

@@ -181,7 +181,7 @@ pub fn build_job(st: &AppState, model: &Value, version_id: Option<i64>, file_id:
     let image = version
         .get("images")
         .and_then(Value::as_array)
-        .and_then(|imgs| imgs.iter().find(|i| i.get("type").and_then(Value::as_str) != Some("video")));
+        .and_then(|imgs| imgs.iter().find(|i| i.get("url").and_then(Value::as_str).is_some()));
     // Keep the sidecar seed small: the model without its other versions, plus the chosen version.
     let mut model_slim = model.clone();
     if let Some(o) = model_slim.as_object_mut() {
@@ -207,7 +207,11 @@ pub fn build_job(st: &AppState, model: &Value, version_id: Option<i64>, file_id:
         sha256: file.pointer("/hashes/SHA256").and_then(Value::as_str).map(str::to_ascii_lowercase),
         bytes_done: 0,
         error: None,
-        image_url: image.and_then(|i| i.get("url").and_then(Value::as_str)).map(|u| map::resize_image_url(u, 450)),
+        // The first sample, video or not: video-model LoRAs often only have videos.
+        image_url: image.and_then(|i| {
+            let video = i.get("type").and_then(Value::as_str) == Some("video");
+            i.get("url").and_then(Value::as_str).map(|u| map::preview_rendition_url(u, video))
+        }),
         nsfw_level: image.and_then(|i| i.get("nsfwLevel").and_then(Value::as_i64)).unwrap_or(0),
         result_path: None,
         meta: Some(json!({ "model": model_slim, "version": version })),

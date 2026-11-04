@@ -5,7 +5,8 @@ import { closeOverlay, isOpen, openOverlay } from '../overlay'
 import { prefs } from '../prefs'
 import { normalizeFolder, rememberTarget, type Target } from '../targets'
 import { toast } from '../toast'
-import { accessBadge, formatIsoDate, formatSize, htmlToText, isMature, timeLeft } from '../util'
+import { accessBadge, copyText, formatIsoDate, formatSize, htmlToText, isMature, timeLeft, viewerUrl } from '../util'
+import MediaViewer, { type ViewerItem } from './MediaViewer.vue'
 import TargetPicker from './TargetPicker.vue'
 
 const props = defineProps<{ id: number }>()
@@ -63,6 +64,19 @@ async function confirm() {
   }
 }
 
+const viewer = ref<{ items: ViewerItem[]; start: number } | null>(null)
+function openViewer(start: number) {
+  const imgs = version.value?.images ?? []
+  viewer.value = {
+    items: imgs.map((i) => ({ url: viewerUrl(i.full || i.url, i.type === 'video'), video: i.type === 'video', nsfw: i.nsfw_level })),
+    start,
+  }
+  openOverlay('viewer')
+}
+async function copyCreator(name: string) {
+  toast((await copyText(name)) ? '作者名をコピーしました' : 'コピーできませんでした')
+}
+
 const jobLabel: Record<string, string> = { queued: '待機中', running: 'ダウンロード中', done: 'DL 済み', failed: '失敗', canceled: '取消' }
 </script>
 
@@ -78,7 +92,7 @@ const jobLabel: Record<string, string> = { queued: '待機中', running: 'ダウ
         <template v-if="m">
           <div class="meta-chips">
             <span class="chip">{{ m.type }}</span>
-            <span v-if="m.creator" class="chip">by {{ m.creator }}</span>
+            <button v-if="m.creator" class="chip" title="タップで作者名をコピー" @click="copyCreator(m.creator)">by {{ m.creator }}</button>
             <span v-if="m.nsfw" class="chip warn">NSFW</span>
             <span v-if="m.first_published_at" class="chip">初公開 {{ formatIsoDate(m.first_published_at) }}</span>
             <span v-if="m.last_published_at && formatIsoDate(m.last_published_at) !== formatIsoDate(m.first_published_at)" class="chip">最終更新 {{ formatIsoDate(m.last_published_at) }}</span>
@@ -97,10 +111,11 @@ const jobLabel: Record<string, string> = { queued: '待機中', running: 'ダウ
 
           <template v-if="version">
             <div v-if="version.images.length" class="strip">
-              <template v-for="img in version.images" :key="img.url">
-                <video v-if="img.type === 'video'" :src="img.url" muted playsinline loop preload="none" controls :class="{ blur: prefs.blurMature && isMature(img.nsfw_level) }" />
+              <button v-for="(img, i) in version.images" :key="img.url" class="strip-item" :aria-label="`サンプル ${i + 1} を拡大`" @click="openViewer(i)">
+                <video v-if="img.type === 'video'" :src="img.url" muted playsinline loop preload="metadata" :class="{ blur: prefs.blurMature && isMature(img.nsfw_level) }" />
                 <img v-else :src="img.url" alt="" :class="{ blur: prefs.blurMature && isMature(img.nsfw_level) }" />
-              </template>
+                <span v-if="img.type === 'video'" class="play-badge">▶</span>
+              </button>
             </div>
 
             <p class="hint">公開日 {{ formatIsoDate(version.published_at, true) || '不明' }}<template v-if="version.downloads"> ・ ⇩ {{ version.downloads.toLocaleString() }}</template></p>

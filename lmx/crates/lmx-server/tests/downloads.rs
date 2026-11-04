@@ -5,7 +5,7 @@ use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use axum::Router;
 use lmx_core::{config::Roots, downloads::JobStatus, Config};
 use lmx_server::{civitai_api::build_job, downloads, AppState};
-use serde_json::Value;
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use tower_http::services::ServeDir;
 
@@ -126,4 +126,42 @@ async fn build_job_rejects_folder_escape() {
     let e = env("escape").await;
     let model = civitai_fixture("model.json");
     assert!(build_job(&e.state, &model, None, None, None, "../../outside").is_err());
+}
+
+/// A version whose samples are all videos (video-model LoRAs) still gets a preview: the small
+/// transcoded rendition of the first one, stored as `<stem>.preview.mp4` (only that one file).
+#[tokio::test(flavor = "multi_thread")]
+async fn video_only_version_gets_a_single_mp4_preview() {
+    let e = env("videoprev").await;
+    // The fake CDN serves an mp4 (ftyp box) at the path the rewritten URL points to.
+    let mut mp4 = vec![0, 0, 0, 0x20];
+    mp4.extend_from_slice(b"ftypisom");
+    mp4.extend_from_slice(&[0u8; 64]);
+    std::fs::create_dir_all(e.root.parent().unwrap().join("served/key/uuid/transcode=true,width=450,optimized=true")).unwrap();
+    std::fs::write(e.root.parent().unwrap().join("served/key/uuid/transcode=true,width=450,optimized=true/clip.mp4"), &mp4).unwrap();
+
+    let mut model = civitai_fixture("model.json");
+    let video = |n: &str| json!({ "url": format!("{}/key/uuid/original=true/{n}", e.base_url), "type": "video", "nsfwLevel": 1 });
+    let vs = model["modelVersions"].as_array_mut().unwrap();
+    vs[0]["images"] = json!([video("clip.mp4"), video("second.mp4")]);
+    let mut job = build_job(&e.state, &model, None, None, None, "Vid").unwrap();
+    assert_eq!(
+        job.image_url.as_deref(),
+        Some(format!("{}/key/uuid/transcode=true,width=450,optimized=true/clip.mp4", e.base_url).as_str()),
+        "first video, transcoded rendition"
+    );
+    job.url = format!("{}/blob.safetensors", e.base_url);
+    job.sha256 = Some(hex::encode(Sha256::digest(&e.blob)));
+    job.file_name = "vid_lora.safetensors".into();
+    let job = e.state.downloads.enqueue(job).unwrap();
+    downloads::run_job(&e.state, job.id).await;
+    let done = e.state.downloads.get(job.id).unwrap();
+    assert_eq!(done.status, JobStatus::Done, "{:?}", done.error);
+
+    assert_eq!(std::fs::read(e.root.join("Vid/vid_lora.preview.mp4")).unwrap(), mp4);
+    let mut files: Vec<String> = std::fs::read_dir(e.root.join("Vid")).unwrap().map(|f| f.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    files.sort();
+    assert_eq!(files, ["vid_lora.metadata.json", "vid_lora.preview.mp4", "vid_lora.safetensors"], "only one sample is downloaded");
+    let side: Value = serde_json::from_str(&std::fs::read_to_string(e.root.join("Vid/vid_lora.metadata.json")).unwrap()).unwrap();
+    assert!(side["preview_url"].as_str().unwrap().ends_with("vid_lora.preview.mp4"));
 }

@@ -146,14 +146,12 @@ pub fn merge_remote(local: &mut Map<String, Value>, incoming: &Value, source: &s
     }
 }
 
-/// First still image of a version payload (url, nsfwLevel), for a missing preview.
-pub fn first_image(version: &Value) -> Option<(String, i64)> {
+/// First sample of a version payload (url, nsfwLevel, is_video), for a missing preview.
+pub fn first_image(version: &Value) -> Option<(String, i64, bool)> {
     version.get("images")?.as_array()?.iter().find_map(|i| {
-        if i.get("type").and_then(Value::as_str) == Some("video") {
-            return None;
-        }
         let url = i.get("url").and_then(Value::as_str)?;
-        Some((url.to_string(), i.get("nsfwLevel").and_then(Value::as_i64).unwrap_or(0)))
+        let video = i.get("type").and_then(Value::as_str) == Some("video");
+        Some((url.to_string(), i.get("nsfwLevel").and_then(Value::as_i64).unwrap_or(0), video))
     })
 }
 

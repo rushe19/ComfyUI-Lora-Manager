@@ -380,11 +380,11 @@ async fn process(
     // Preview for models that have none.
     let mut preview: Option<(String, i64)> = None;
     if previews && r.preview_path.is_none() {
-        if let Some((url, nsfw)) = merge::first_image(&incoming) {
+        if let Some((url, nsfw, video)) = merge::first_image(&incoming) {
             bump(state, |v| v.image_requests += 1);
-            if let Ok(bytes) = state.civitai.fetch_bytes(&lmx_civitai::map::resize_image_url(&url, 450)).await {
-                if let Some(ext) = crate::downloads::image_ext(&bytes) {
-                    let p = paths::append(&paths::stem_path(&model_path), &format!(".preview.{ext}"));
+            if let Ok(bytes) = state.civitai.fetch_bytes(&lmx_civitai::map::preview_rendition_url(&url, video)).await {
+                if let Some(ext) = crate::downloads::media_ext(&bytes) {
+                    let p = crate::downloads::preview_target(&model_path, ext);
                     if !p.exists() && std::fs::write(&p, &bytes).is_ok() {
                         bump(state, |v| v.previews_added += 1);
                         preview = Some((paths::norm(&p), nsfw));
