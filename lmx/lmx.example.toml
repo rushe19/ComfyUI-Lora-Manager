@@ -1,13 +1,32 @@
 # lmx configuration. Copy to data/lmx.toml and edit.
 
-# Import model roots from an existing LoRA Manager settings.json (read-only).
+# Import model roots (and the Civitai API key / archive DB location) from an existing
+# LoRA Manager settings.json. Read-only: lmx never writes to it.
 # lm_settings = "C:/path/to/ComfyUI-Lora-Manager/settings.json"
 
-# Host for "open on Civitai" links. civitai.red shows mature content.
+# Host for Civitai API calls and "open on Civitai" links. civitai.red shows mature content.
 civitai_host = "civitai.com"
+
+# Civitai API key (needed for favorites and gated downloads). When empty and lm_settings is
+# set, LoRA Manager's civitai_api_key is used. Never commit a real key.
+# civitai_api_key = ""
+
+# Where metadata comes from when lmx creates/refreshes .metadata.json:
+# "archive_first" (local CivArchive DB, then Civitai), "archive_only", "civitai_first".
+# metadata_source = "archive_first"
+
+# Local CivArchive DB (read-only). Defaults to LoRA Manager's civitai/civitai.sqlite when
+# lm_settings is set and LoRA Manager has enable_metadata_archive_db on.
+# archive_db = "C:/path/to/ComfyUI-Lora-Manager/civitai/civitai.sqlite"
 
 # Parallel workers for reading sidecars during a scan.
 scan_threads = 16
+
+# Parallel model downloads.
+# download_concurrency = 2
+
+# Rescan automatically when files change in the model folders.
+# watch = true
 
 [roots]
 lora = []

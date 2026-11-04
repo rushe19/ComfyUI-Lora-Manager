@@ -23,6 +23,7 @@ hex = "0.4"
 rusqlite = { version = "0.41", features = ["bundled"] }
 trash = "5"
 notify = "8"
+getrandom = "0.2"
 
 [dev-dependencies]
 http-body-util = "0.1"

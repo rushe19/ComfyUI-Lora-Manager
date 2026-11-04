@@ -156,6 +156,18 @@ async fn check_finds_same_base_updates_and_persists_ignores() {
     assert_eq!(stats["by_base"][0]["count"], 2);
     call(&st, &web, "POST", "/api/updates/ignore", Some(json!({"model_id": 100, "ignore": true}))).await;
 
+    // Settings backup round trip: export, clear ignores, restore.
+    let bk = call(&st, &web, "GET", "/api/backup", None).await;
+    assert_eq!(bk["format"], "lmx-settings");
+    assert_eq!(bk["updates_ignored"]["models"], json!([100]));
+    assert_eq!(bk["prefs"]["auto_update_check"], false);
+    call(&st, &web, "POST", "/api/updates/ignore", Some(json!({"model_id": 100, "ignore": false}))).await;
+    call(&st, &web, "PUT", "/api/updates/auto", Some(json!({"enabled": true}))).await;
+    let r = call(&st, &web, "POST", "/api/backup/restore", Some(bk)).await;
+    assert_eq!(r["restored"], json!(["prefs", "updates_ignored"]));
+    let s = call(&st, &web, "GET", "/api/updates/status", None).await;
+    assert_eq!((s["ignored_models"].as_i64(), s["auto"].as_bool()), (Some(1), Some(false)));
+
     // A restarted server keeps the results, ignores and the auto setting.
     drop(st);
     let st2 = AppState::open(cfg).unwrap();

@@ -1,6 +1,8 @@
 //! lmx HTTP server: REST API over the in-memory library, previews/thumbnails, static PWA shell.
 
 pub mod api;
+pub mod auth;
+pub mod backup;
 pub mod civitai_api;
 pub mod downloads;
 pub mod metadata;
@@ -40,6 +42,10 @@ pub fn app(state: Arc<AppState>, web_dir: PathBuf) -> Router {
 
     let api = Router::new()
         .route("/health", get(api::health))
+        .route("/auth/status", get(auth::status))
+        .route("/auth/login", post(auth::login))
+        .route("/auth/logout", post(auth::logout))
+        .route("/auth/password", axum::routing::put(auth::set_password))
         .route("/status", get(api::status))
         .route("/scan", post(api::start_scan))
         .route("/models", get(api::list_models))
@@ -53,6 +59,8 @@ pub fn app(state: Arc<AppState>, web_dir: PathBuf) -> Router {
         .route("/metadata/preview", post(ops::metadata_preview))
         .route("/metadata/job", get(ops::metadata_job).delete(ops::metadata_cancel))
         .route("/stats", get(stats::stats))
+        .route("/backup", get(backup::export))
+        .route("/backup/restore", post(backup::restore))
         .route("/updates", get(updates::list))
         .route("/updates/status", get(updates::status))
         .route("/updates/check", post(updates::start).delete(updates::cancel))
@@ -70,6 +78,7 @@ pub fn app(state: Arc<AppState>, web_dir: PathBuf) -> Router {
         .route("/downloads/{id}", delete(civitai_api::cancel))
         .route("/downloads/{id}/retry", post(civitai_api::retry))
         .fallback(|| async { (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "not found"}))) })
+        .layer(axum::middleware::from_fn_with_state(state.clone(), auth::require))
         .with_state(state);
 
     Router::new().nest("/api", api).merge(sw).fallback_service(static_files).layer(CompressionLayer::new())

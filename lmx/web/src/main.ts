@@ -1,9 +1,12 @@
 import { createApp } from 'vue'
 import App from './App.vue'
+import { refreshAuth, watchAuth } from './auth'
 import { applyTheme, prefs } from './prefs'
 import './styles.css'
 
 applyTheme(prefs.theme)
+watchAuth()
+void refreshAuth()
 createApp(App).mount('#app')
 
 // Service workers only register on secure origins (https or localhost).

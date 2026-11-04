@@ -317,3 +317,9 @@ button.danger.small, button.small { padding: 4px 8px; font-size: 12px; border-ra
 .nav-badge.info { background: #2563eb; }
 .seg.mini { display: inline-flex; margin-left: 8px; vertical-align: middle; }
 .seg.mini button { font-size: 11px; padding: 2px 8px; }
+
+/* Login / password */
+.login-screen { min-height: 100dvh; display: grid; place-items: center; padding: 16px; }
+.login-box { width: min(360px, 100%); display: grid; gap: 10px; }
+.login-box h2 { margin: 0; }
+.pw-form { display: grid; gap: 8px; max-width: 420px; }

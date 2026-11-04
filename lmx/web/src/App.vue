@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { fetchUpdateStatus, listDownloads } from './api'
+import { auth } from './auth'
 import CivitaiView from './components/CivitaiView.vue'
+import LoginView from './components/LoginView.vue'
 import DownloadsView from './components/DownloadsView.vue'
 import LibraryView from './components/LibraryView.vue'
 import SettingsView from './components/SettingsView.vue'
@@ -53,7 +55,8 @@ onBeforeUnmount(() => window.clearTimeout(upTimer))
 </script>
 
 <template>
-  <div class="app">
+  <LoginView v-if="auth.required" />
+  <div v-else class="app">
     <LibraryView v-show="tab === 'library'" class="view" :active="tab === 'library'" />
     <!-- Kept alive after first open so search results survive tab switches. -->
     <CivitaiView v-if="civitaiOpened" v-show="tab === 'civitai'" class="view" />

@@ -416,6 +416,19 @@ pub async fn list(State(st): State<Arc<AppState>>, Query(q): Query<ListQuery>) -
     Json(json!({ "items": rows.into_iter().map(|r| r.1).collect::<Vec<_>>() }))
 }
 
+/// Replace the ignore lists (settings restore).
+pub fn set_ignored(st: &AppState, models: Vec<i64>, versions: Vec<i64>) {
+    {
+        let mut s = st.updates.stored.write().expect("updates");
+        s.ignored_models = models.into_iter().collect();
+        s.ignored_versions = versions.into_iter().collect();
+    }
+    st.updates.touch();
+    if let Err(e) = save(st) {
+        tracing::warn!("saving updates.json failed: {e}");
+    }
+}
+
 #[derive(Deserialize)]
 pub struct IgnoreBody {
     pub model_id: Option<i64>,

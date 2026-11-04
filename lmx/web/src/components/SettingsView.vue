@@ -4,10 +4,12 @@ import { fetchHealth, fetchStatus, startScan, type Status } from '../api'
 import { prefs, type Theme } from '../prefs'
 import { toast } from '../toast'
 import { formatDate } from '../util'
+import BackupPanel from './BackupPanel.vue'
 import BaseModelSettings from './BaseModelSettings.vue'
 import StatsPanel from './StatsPanel.vue'
 import UpdatesPanel from './UpdatesPanel.vue'
 import MetadataPanel from './MetadataPanel.vue'
+import PasswordPanel from './PasswordPanel.vue'
 import ToolsPanels from './ToolsPanels.vue'
 
 const status = ref<Status | null>(null)
@@ -86,6 +88,8 @@ const themes: { id: Theme; label: string }[] = [
     <BaseModelSettings />
     <MetadataPanel />
     <ToolsPanels />
+    <PasswordPanel />
+    <BackupPanel />
 
     <div v-if="status" class="card-box">
       <h4>モデルの場所</h4>

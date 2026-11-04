@@ -36,6 +36,7 @@ pub struct AppState {
     pub writes: tokio::sync::Mutex<()>,
     pub search: crate::search_prefs::SearchState,
     pub updates: crate::updates::Updates,
+    pub auth: crate::auth::Auth,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -74,6 +75,7 @@ impl AppState {
             writes: tokio::sync::Mutex::new(()),
             search: Default::default(),
             updates: crate::updates::Updates::load(&cfg_data.join("updates.json")),
+            auth: crate::auth::Auth::load(&cfg_data.join("auth.json")),
         }))
     }
 
