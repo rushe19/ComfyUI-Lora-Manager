@@ -241,6 +241,68 @@ impl CivitaiClient {
         Ok(v.get("items").and_then(Value::as_array).cloned().unwrap_or_default())
     }
 
+    /// The site's internal tRPC endpoint, next to the public REST base (`.../api/v1` -> `.../api/trpc`).
+    fn trpc_url(&self, procedure: &str) -> String {
+        let base = self.api_base.strip_suffix("/v1").unwrap_or(&self.api_base);
+        format!("{}/trpc/{procedure}", base.trim_end_matches('/'))
+    }
+
+    async fn trpc_send(&self, req: reqwest::RequestBuilder) -> Result<Value, CivitaiError> {
+        let Some(key) = &self.key else { return Err(CivitaiError::NeedsKey) };
+        self.limiter.wait().await;
+        let res = req
+            .bearer_auth(key)
+            .header("Accept", "application/json")
+            .timeout(Duration::from_secs(25))
+            .send()
+            .await
+            .map_err(|e| CivitaiError::Network(e.to_string()))?;
+        let status = res.status();
+        if !status.is_success() {
+            let body = res.text().await.unwrap_or_default();
+            return Err(CivitaiError::Http(status.as_u16(), body.chars().take(200).collect()));
+        }
+        let v: Value = res.json().await.map_err(|e| CivitaiError::Decode(e.to_string()))?;
+        Ok(v.pointer("/result/data/json").cloned().unwrap_or(Value::Null))
+    }
+
+    /// Which of `ids` (max 200 per call) the API key's user has favorited. On Civitai a favorite is
+    /// the model's thumbs-up (a recommending review) plus notifications plus the bookmark.
+    pub async fn favorite_ids(&self, ids: &[i64]) -> Result<Vec<i64>, CivitaiError> {
+        let mut out = Vec::new();
+        for chunk in ids.chunks(200) {
+            let input = serde_json::json!({ "json": { "modelIds": chunk } }).to_string();
+            let url = reqwest::Url::parse_with_params(&self.trpc_url("user.getEngagedModelsByIds"), [("input", input)])
+                .map_err(|e| CivitaiError::Decode(e.to_string()))?;
+            let v = self.trpc_send(self.http.get(url)).await?;
+            out.extend(v.get("Recommended").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_i64));
+        }
+        out.sort_unstable();
+        out.dedup();
+        Ok(out)
+    }
+
+    /// Favorite or un-favorite a model (`user.toggleFavorite` with an explicit direction). Without a
+    /// version id Civitai uses the model's latest published version. Needs a key with write access.
+    /// Cached search results are dropped so the favorites list reflects the change.
+    pub async fn set_favorite(&self, model_id: i64, on: bool) -> Result<(), CivitaiError> {
+        let body = serde_json::json!({ "json": { "modelId": model_id, "setTo": on } });
+        let req = self.http.post(self.trpc_url("user.toggleFavorite")).json(&body);
+        match self.trpc_send(req).await {
+            Ok(_) => {}
+            Err(CivitaiError::Http(c @ (401 | 403), _)) => {
+                return Err(CivitaiError::Http(
+                    c,
+                    "この API キーにはお気に入りを変更する権限がありません（Civitai の API キー設定で書き込み権限のあるキーを使ってください）".into(),
+                ))
+            }
+            Err(e) => return Err(e),
+        }
+        self.cache.lock().expect("cache lock").clear();
+        self.pools.lock().expect("pool lock").clear();
+        Ok(())
+    }
+
     /// `/enums` (model types, base models). Not cached here; callers keep their own copy.
     pub async fn enums(&self) -> Result<Value, CivitaiError> {
         self.get_json_opt("/enums", &[], false, false).await

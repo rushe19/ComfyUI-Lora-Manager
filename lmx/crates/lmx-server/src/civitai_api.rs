@@ -30,6 +30,7 @@ fn civitai_err(e: CivitaiError) -> Response {
     match e {
         CivitaiError::NeedsKey => err(StatusCode::BAD_REQUEST, "needs_key", "Civitai の API キーが必要です"),
         CivitaiError::Http(404, _) => err(StatusCode::NOT_FOUND, "not_found", "Civitai に見つかりません"),
+        CivitaiError::Http(401 | 403, m) if m.contains("権限") => err(StatusCode::FORBIDDEN, "forbidden", m),
         other => err(StatusCode::BAD_GATEWAY, "civitai", other.to_string()),
     }
 }
@@ -126,6 +127,40 @@ pub async fn model(State(st): State<Arc<AppState>>, Path(id): Path<i64>) -> Resp
     let jobs = st.downloads.version_status();
     let own = Ownership { by_sha: Some(lib.sha_index()), by_version: Some(lib.version_index()), jobs: Some(&jobs) };
     Json(map::model_view(&m, &own, &st.cfg.civitai_host)).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct FavQuery {
+    /// Comma separated model ids.
+    pub ids: Option<String>,
+}
+
+/// Which of the given Civitai model ids are favorites of the API key's user (one request per 200).
+pub async fn favorites(State(st): State<Arc<AppState>>, Query(p): Query<FavQuery>) -> Response {
+    let ids: Vec<i64> = p.ids.as_deref().unwrap_or("").split(',').filter_map(|x| x.trim().parse().ok()).take(1000).collect();
+    if ids.is_empty() {
+        return Json(json!({ "favorite": [], "has_key": st.civitai.has_key() })).into_response();
+    }
+    match st.civitai.favorite_ids(&ids).await {
+        Ok(f) => Json(json!({ "favorite": f, "has_key": true })).into_response(),
+        Err(e) => civitai_err(e),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct FavBody {
+    pub on: bool,
+}
+
+/// Favorite / un-favorite a model on Civitai, then report the state Civitai actually has.
+pub async fn set_favorite(State(st): State<Arc<AppState>>, Path(id): Path<i64>, Json(b): Json<FavBody>) -> Response {
+    if let Err(e) = st.civitai.set_favorite(id, b.on).await {
+        return civitai_err(e);
+    }
+    match st.civitai.favorite_ids(&[id]).await {
+        Ok(f) => Json(json!({ "favorite": f.contains(&id) })).into_response(),
+        Err(e) => civitai_err(e),
+    }
 }
 
 #[derive(Deserialize)]

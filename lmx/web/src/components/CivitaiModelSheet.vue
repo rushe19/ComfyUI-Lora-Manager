@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ApiError, civitaiModel, enqueueDownload, type CivFile, type CivModel, type CivVersion } from '../api'
+import { checkFavorites, favs, toggleFavorite } from '../civFavorites'
 import { closeOverlay, isOpen, openOverlay } from '../overlay'
 import { prefs } from '../prefs'
 import { normalizeFolder, rememberTarget, type Target } from '../targets'
@@ -32,7 +33,31 @@ async function load() {
     error.value = (e as Error).message
   }
 }
-onMounted(load)
+onMounted(() => {
+  void load()
+  void checkFavorites([props.id])
+})
+
+const isFav = computed(() => favs.ids.has(props.id))
+const favBusy = ref(false)
+const confirmUnfav = ref(false)
+async function setFav(on: boolean) {
+  favBusy.value = true
+  confirmUnfav.value = false
+  try {
+    const now = await toggleFavorite(props.id, on)
+    toast(now ? 'Civitai のお気に入りに追加しました' : 'お気に入りを外しました')
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : String(e), 4000)
+  } finally {
+    favBusy.value = false
+  }
+}
+function onFavTap() {
+  if (favBusy.value) return
+  if (isFav.value) confirmUnfav.value = true
+  else void setFav(true)
+}
 
 function startDownload(file: CivFile) {
   if (!version.value) return
@@ -94,11 +119,17 @@ const jobLabel: Record<string, string> = { queued: '待機中', running: 'ダウ
           <div class="meta-chips">
             <span class="chip">{{ m.type }}</span>
             <button v-if="m.creator" class="chip" title="タップで作者名をコピー" @click="copyCreator(m.creator)">by {{ m.creator }}</button>
+            <button v-if="favs.available" class="chip fav-chip" :class="{ on: isFav }" :disabled="favBusy" :aria-pressed="isFav" @click="onFavTap">{{ isFav ? '♥ お気に入り中' : '♡ お気に入り' }}</button>
             <span v-if="m.nsfw" class="chip warn">NSFW</span>
             <span v-if="m.first_published_at" class="chip">初公開 {{ formatIsoDate(m.first_published_at) }}</span>
             <span v-if="m.last_published_at && formatIsoDate(m.last_published_at) !== formatIsoDate(m.first_published_at)" class="chip">最終更新 {{ formatIsoDate(m.last_published_at) }}</span>
             <a class="chip" :href="m.url" target="_blank" rel="noopener noreferrer">Civitai で開く ↗</a>
           </div>
+
+          <p v-if="confirmUnfav" class="warn-box">
+            Civitai のお気に入りを外します。Civitai ではお気に入りが「おすすめ（いいね）＋通知＋ブックマーク」なので、このモデルへの自分のおすすめ評価と通知も外れます。
+            <span class="actions"><button class="danger" @click="setFav(false)">外す</button><button @click="confirmUnfav = false">やめる</button></span>
+          </p>
 
           <h4>バージョン</h4>
           <div class="seg versions">

@@ -350,3 +350,7 @@ button.chip { font-family: inherit; }
 .civ-grid > .card { content-visibility: auto; contain-intrinsic-size: auto 250px; }
 .strip-item video { background: var(--surface-2); }
 
+/* Civitai favorites */
+.thumb .fav-mark { position: absolute; right: 6px; bottom: 6px; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: rgba(0, 0, 0, 0.55); color: #f43f5e; font-size: 15px; line-height: 1; }
+.chip.fav-chip.on { border-color: #f43f5e; color: #f43f5e; }
+.chip.fav-chip:disabled { opacity: 0.6; }

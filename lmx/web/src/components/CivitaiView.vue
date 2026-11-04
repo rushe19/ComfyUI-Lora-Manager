@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ApiError, civitaiSearch, enqueueUrls, type CivCard, type CivSearchPage, type ModelType } from '../api'
 import { baseModels, loadBaseModels, orderLike } from '../baseModels'
 import { closeOverlay, isOpen, openOverlay } from '../overlay'
+import { checkFavorites, favs, markAllFavorite } from '../civFavorites'
 import { prefs } from '../prefs'
 import LazyVideo from './LazyVideo.vue'
 import { normalizeFolder, rememberTarget, type Target } from '../targets'
@@ -74,6 +75,9 @@ async function run(reset: boolean) {
     )
     if (my !== gen) return
     items.value = items.value.concat(page.items)
+    const pageIds = page.items.map((c) => c.id)
+    if (mode.value === 'favorites') markAllFavorite(pageIds)
+    else void checkFavorites(pageIds)
     cursor.value = page.next_cursor
     resorted.value = page.resorted
     hasKey.value = page.has_key
@@ -197,6 +201,7 @@ const urlCount = computed(() => urlText.value.split('\n').filter((l) => l.trim()
             <img v-else-if="c.image" :src="c.image.url" decoding="async" alt="" />
             <div v-else class="noimg">No preview</div>
             <span class="base">{{ c.base_models.join(' / ') || c.type }}</span>
+            <span v-if="favs.ids.has(c.id)" class="fav-mark" title="Civitai のお気に入り">♥</span>
             <span v-if="c.owned_versions" class="owned">所持 {{ c.owned_versions }}/{{ c.versions }}</span>
             <span v-else-if="c.queued" class="owned queued">DL 待ち</span>
             <span v-if="c.access" class="access" :class="c.access.kind" :title="c.free_versions ? '旧バージョンは無料でダウンロードできます' : ''">

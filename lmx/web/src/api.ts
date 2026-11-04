@@ -356,6 +356,10 @@ export function buildCivitaiQuery(p: CivSearchParams): string {
 
 export const civitaiSearch = (p: CivSearchParams, signal?: AbortSignal) => send<CivSearchPage>('GET', `/api/civitai/search?${buildCivitaiQuery(p)}`, undefined, signal)
 export const civitaiModel = (id: number) => send<CivModel>('GET', `/api/civitai/models/${id}`)
+/** Which of these Civitai model ids the API key's user has favorited. */
+export const civitaiFavorites = (ids: number[]) => send<{ favorite: number[]; has_key: boolean }>('GET', `/api/civitai/favorites?ids=${ids.join(',')}`)
+/** Favorite / un-favorite on Civitai; resolves to the state Civitai reports afterwards. */
+export const setCivitaiFavorite = (id: number, on: boolean) => send<{ favorite: boolean }>('PUT', `/api/civitai/models/${id}/favorite`, { on })
 export const downloadTargets = (type: ModelType) => send<Targets>('GET', `/api/download-targets?type=${type}`)
 export const enqueueDownload = (b: { model_id: number; version_id: number; file_id?: number | null; root?: string | null; folder: string }) =>
   send<{ job: DownloadJob }>('POST', '/api/downloads', b)

@@ -80,7 +80,7 @@ fn s<'a>(v: &'a Value, k: &str) -> &'a str {
     v.get(k).and_then(Value::as_str).unwrap_or("")
 }
 
-fn image_view(img: &Value, width: u32) -> Value {
+fn image_view(img: &Value, _width: u32) -> Value {
     let url = s(img, "url");
     let kind = s(img, "type");
     json!({

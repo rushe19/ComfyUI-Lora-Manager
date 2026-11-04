@@ -85,6 +85,8 @@ pub fn app(state: Arc<AppState>, web_dir: PathBuf) -> Router {
         .route("/civitai/search", get(civitai_api::search))
         .route("/civitai/base-models", get(search_prefs::get_base_models).put(search_prefs::put_base_models))
         .route("/civitai/models/{id}", get(civitai_api::model))
+        .route("/civitai/models/{id}/favorite", axum::routing::put(civitai_api::set_favorite))
+        .route("/civitai/favorites", get(civitai_api::favorites))
         .route("/download-targets", get(civitai_api::targets))
         .route("/downloads", get(civitai_api::list).post(civitai_api::enqueue))
         .route("/downloads/urls", post(civitai_api::enqueue_urls))
