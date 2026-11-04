@@ -139,6 +139,20 @@ async fn static_shell_and_api_404() {
         .await
         .unwrap();
     assert_eq!(res.headers()["cache-control"], "no-cache");
+    // The shell is always revalidated (a phone must see a new build); hashed assets are cached for good.
+    std::fs::create_dir_all(f.web.join("assets")).unwrap();
+    std::fs::write(f.web.join("assets/index-abc123.js"), "console.log(1)").unwrap();
+    let cc = |path: &'static str| {
+        let f = &f;
+        async move {
+            let res = app(f.state.clone(), f.web.clone()).oneshot(Request::get(path).body(Body::empty()).unwrap()).await.unwrap();
+            res.headers().get("cache-control").map(|v| v.to_str().unwrap().to_string())
+        }
+    };
+    assert_eq!(cc("/").await.as_deref(), Some("no-cache"));
+    assert_eq!(cc("/index.html").await.as_deref(), Some("no-cache"));
+    assert_eq!(cc("/loras/deep/link").await.as_deref(), Some("no-cache"), "deep-link fallback too");
+    assert_eq!(cc("/assets/index-abc123.js").await.as_deref(), Some("public, max-age=31536000, immutable"));
     let (s, ct, body) = get(&f, "/api/health").await;
     assert_eq!((s, ct.starts_with("application/json")), (200, true));
     assert!(body.contains("\"status\":\"ok\""));

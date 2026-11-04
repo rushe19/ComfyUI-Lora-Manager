@@ -1,6 +1,6 @@
 // lmx service worker (Phase 0): cache the app shell, never cache the API.
 // Bump SHELL_VERSION when the shell list changes; hashed /assets/* are cached on first use.
-const SHELL_VERSION = 'lmx-shell-v1'
+const SHELL_VERSION = 'lmx-shell-v2'
 const SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png']
 
 self.addEventListener('install', (event) => {
@@ -26,7 +26,8 @@ self.addEventListener('fetch', (event) => {
   // Navigations: network first so a new build is picked up, fall back to the cached shell offline.
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req)
+      // cache: 'no-cache' makes the browser revalidate instead of reusing a heuristically fresh index.html.
+      fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' })
         .then((res) => {
           const copy = res.clone()
           caches.open(SHELL_VERSION).then((c) => c.put('/', copy))

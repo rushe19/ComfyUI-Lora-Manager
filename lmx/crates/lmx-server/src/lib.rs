@@ -29,6 +29,19 @@ use tower_http::{
 
 pub use state::AppState;
 
+/// Cache policy for the PWA files: the shell (index.html and friends) must be revalidated every time,
+/// otherwise a phone keeps serving yesterday's index.html (browsers cache by Last-Modified heuristics)
+/// and never sees the new build. Hashed `/assets/*` can be cached forever.
+async fn static_cache(req: axum::extract::Request, next: axum::middleware::Next) -> axum::response::Response {
+    let path = req.uri().path().to_string();
+    let mut res = next.run(req).await;
+    if res.status().is_success() {
+        let v = if path.starts_with("/assets/") { "public, max-age=31536000, immutable" } else { "no-cache" };
+        res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static(v));
+    }
+    res
+}
+
 /// Build the application router. `web_dir` is the built PWA (`web/dist`).
 pub fn app(state: Arc<AppState>, web_dir: PathBuf) -> Router {
     let index = web_dir.join("index.html");
@@ -81,5 +94,6 @@ pub fn app(state: Arc<AppState>, web_dir: PathBuf) -> Router {
         .layer(axum::middleware::from_fn_with_state(state.clone(), auth::require))
         .with_state(state);
 
-    Router::new().nest("/api", api).merge(sw).fallback_service(static_files).layer(CompressionLayer::new())
+    let shell = Router::new().fallback_service(static_files).layer(axum::middleware::from_fn(static_cache));
+    Router::new().nest("/api", api).merge(sw).merge(shell).layer(CompressionLayer::new())
 }
