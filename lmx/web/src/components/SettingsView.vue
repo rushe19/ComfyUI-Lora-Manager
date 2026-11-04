@@ -5,6 +5,8 @@ import { prefs, type Theme } from '../prefs'
 import { toast } from '../toast'
 import { formatDate } from '../util'
 import BaseModelSettings from './BaseModelSettings.vue'
+import StatsPanel from './StatsPanel.vue'
+import UpdatesPanel from './UpdatesPanel.vue'
 import MetadataPanel from './MetadataPanel.vue'
 import ToolsPanels from './ToolsPanels.vue'
 
@@ -79,6 +81,8 @@ const themes: { id: Theme; label: string }[] = [
       <button :disabled="status.scanning" @click="rescan">再スキャン</button>
     </div>
 
+    <UpdatesPanel />
+    <StatsPanel />
     <BaseModelSettings />
     <MetadataPanel />
     <ToolsPanels />

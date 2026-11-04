@@ -30,6 +30,7 @@ async fn main() -> anyhow::Result<()> {
     // Serve right away from the stored index; refresh it in the background.
     state.spawn_scan();
     lmx_server::downloads::spawn_worker(state.clone());
+    lmx_server::updates::spawn_scheduler(state.clone());
     let _watch = if state.cfg.watch { lmx_server::watch::start(state.clone()) } else { None };
     if state.cfg.archive_db.is_some() {
         // Build/verify the archive hash table in the background (first time ~15 s).

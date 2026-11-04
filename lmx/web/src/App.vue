@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { listDownloads } from './api'
+import { fetchUpdateStatus, listDownloads } from './api'
 import CivitaiView from './components/CivitaiView.vue'
 import DownloadsView from './components/DownloadsView.vue'
 import LibraryView from './components/LibraryView.vue'
@@ -11,6 +11,7 @@ type Tab = 'library' | 'civitai' | 'downloads' | 'settings'
 const tab = ref<Tab>('library')
 const civitaiOpened = ref(false)
 const activeDownloads = ref(0)
+const updates = ref(0)
 const tabs: { id: Tab; label: string; icon: string }[] = [
   { id: 'library', label: 'ライブラリ', icon: '▦' },
   { id: 'civitai', label: 'Civitai', icon: '⌕' },
@@ -35,6 +36,20 @@ async function poll() {
 }
 onMounted(poll)
 onBeforeUnmount(() => window.clearTimeout(timer))
+
+// Badge with the number of owned models that have a new version (checked every 5 minutes).
+let upTimer: number | undefined
+async function pollUpdates() {
+  try {
+    const s = await fetchUpdateStatus()
+    updates.value = s.counts.models
+    upTimer = window.setTimeout(pollUpdates, s.job.running ? 5000 : 300_000)
+  } catch {
+    upTimer = window.setTimeout(pollUpdates, 300_000)
+  }
+}
+onMounted(pollUpdates)
+onBeforeUnmount(() => window.clearTimeout(upTimer))
 </script>
 
 <template>
@@ -46,7 +61,7 @@ onBeforeUnmount(() => window.clearTimeout(timer))
     <SettingsView v-if="tab === 'settings'" class="view" />
     <nav class="bottom-nav">
       <button v-for="t in tabs" :key="t.id" :class="{ active: tab === t.id }" @click="go(t.id)">
-        <span class="icon">{{ t.icon }}<b v-if="t.id === 'downloads' && activeDownloads" class="nav-badge">{{ activeDownloads }}</b></span><span>{{ t.label }}</span>
+        <span class="icon">{{ t.icon }}<b v-if="t.id === 'downloads' && activeDownloads" class="nav-badge">{{ activeDownloads }}</b><b v-else-if="t.id === 'library' && updates" class="nav-badge info" title="新しいバージョンがあるモデル">{{ updates > 99 ? '99+' : updates }}</b></span><span>{{ t.label }}</span>
       </button>
     </nav>
     <div v-if="toastText" class="toast" role="status">{{ toastText }}<button v-if="toastAction" class="toast-action" @click="runToastAction">{{ toastAction.label }}</button></div>

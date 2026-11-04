@@ -110,6 +110,7 @@ function style(index: number) {
           <span class="base">{{ item.base_model }}</span>
           <span v-if="item.favorite" class="fav">★</span>
           <span v-if="item.damaged" class="damaged">要修復</span>
+          <span v-else-if="item.update" class="update-badge" title="Civitai に新しいバージョンがあります">NEW</span>
           <span v-else-if="!item.linked" class="unlinked" title="メタデータ未取得">?</span>
           <span v-if="selected" class="check">{{ selected.has(item.id) ? '✓' : '' }}</span>
         </div>

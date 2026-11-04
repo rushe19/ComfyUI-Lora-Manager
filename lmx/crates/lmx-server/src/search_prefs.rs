@@ -27,6 +27,9 @@ pub struct Prefs {
     /// Base models shown as chips in Civitai search. `None` = not chosen yet (use local ones).
     #[serde(default)]
     pub search_base_models: Option<Vec<String>>,
+    /// Daily new-version check (default on).
+    #[serde(default)]
+    pub auto_update_check: Option<bool>,
 }
 
 #[derive(Default)]
@@ -58,6 +61,13 @@ fn save_prefs(st: &AppState, p: &Prefs) -> std::io::Result<()> {
     std::fs::rename(&tmp, &path)?;
     *st.search.prefs.lock().expect("prefs lock") = Some(p.clone());
     Ok(())
+}
+
+/// Change prefs and save them.
+pub fn update_prefs(st: &AppState, f: impl FnOnce(&mut Prefs)) -> std::io::Result<()> {
+    let mut p = load_prefs(st);
+    f(&mut p);
+    save_prefs(st, &p)
 }
 
 /// Merge a fresh `/enums` list into the cache, recording first-seen times for new names.

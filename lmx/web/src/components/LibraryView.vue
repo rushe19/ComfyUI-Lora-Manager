@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { fetchFacets, fetchFolders, fetchModels, fetchStatus, type Facets, type FolderCount, type ModelSummary, type ModelType, type SortKey } from '../api'
+import { fetchFacets, fetchFolders, fetchModels, fetchStatus, fetchUpdateStatus, type Facets, type FolderCount, type ModelSummary, type ModelType, type SortKey, type UpdateCounts } from '../api'
 import { isOpen, openOverlay, closeOverlay } from '../overlay'
 import ModelGrid from './ModelGrid.vue'
 import DetailSheet from './DetailSheet.vue'
@@ -24,6 +24,7 @@ const f = reactive({
   fav: false,
   damaged: false,
   unlinked: false,
+  updates: false,
   sort: (localStorage.getItem('lmx.sort') as SortKey) || 'name',
   desc: localStorage.getItem('lmx.desc') === '1',
 })
@@ -40,7 +41,16 @@ const selectedId = ref<number | null>(null)
 let generation = 0
 let ctrl: AbortController | null = null
 
-const activeFilters = computed(() => f.base.length + (f.folder != null ? 1 : 0) + (f.fav ? 1 : 0) + (f.damaged ? 1 : 0) + (f.unlinked ? 1 : 0))
+const activeFilters = computed(() => f.base.length + (f.folder != null ? 1 : 0) + (f.fav ? 1 : 0) + (f.damaged ? 1 : 0) + (f.unlinked ? 1 : 0) + (f.updates ? 1 : 0))
+const updateCounts = ref<Partial<Record<ModelType, UpdateCounts>>>({})
+const typeUpdates = computed(() => updateCounts.value[f.type]?.models ?? 0)
+async function refreshUpdates() {
+  try {
+    updateCounts.value = (await fetchUpdateStatus()).by_type
+  } catch {
+    /* ignore */
+  }
+}
 
 // Selection mode (long press or the 選択 button).
 const selecting = ref(false)
@@ -80,7 +90,7 @@ async function softRefresh() {
   ctrl = new AbortController()
   try {
     const page = await fetchModels(
-      { type: f.type, q: f.q, base: f.base, folder: f.folder, fav: f.fav, damaged: f.damaged, unlinked: f.unlinked, sort: f.sort, desc: f.desc, offset: 0, limit: Math.max(items.value.length, PAGE) },
+      { type: f.type, q: f.q, base: f.base, folder: f.folder, fav: f.fav, damaged: f.damaged, unlinked: f.unlinked, updates: f.updates, sort: f.sort, desc: f.desc, offset: 0, limit: Math.max(items.value.length, PAGE) },
       ctrl.signal,
     )
     if (gen !== generation) return
@@ -93,6 +103,7 @@ async function softRefresh() {
   }
   void loadFacets()
   void refreshCounts()
+  void refreshUpdates()
 }
 function reopen(id: number) {
   selectedId.value = id
@@ -110,7 +121,7 @@ async function loadMore() {
   ctrl = new AbortController()
   try {
     const page = await fetchModels(
-      { type: f.type, q: f.q, base: f.base, folder: f.folder, fav: f.fav, damaged: f.damaged, unlinked: f.unlinked, sort: f.sort, desc: f.desc, offset: nextOffset.value, limit: PAGE },
+      { type: f.type, q: f.q, base: f.base, folder: f.folder, fav: f.fav, damaged: f.damaged, unlinked: f.unlinked, updates: f.updates, sort: f.sort, desc: f.desc, offset: nextOffset.value, limit: PAGE },
       ctrl.signal,
     )
     if (gen !== generation) return
@@ -152,7 +163,7 @@ watch(
   },
 )
 watch(
-  () => [f.base.join(','), f.folder, f.fav, f.damaged, f.unlinked, f.sort, f.desc],
+  () => [f.base.join(','), f.folder, f.fav, f.damaged, f.unlinked, f.updates, f.sort, f.desc],
   () => {
     localStorage.setItem('lmx.sort', f.sort)
     localStorage.setItem('lmx.desc', f.desc ? '1' : '0')
@@ -180,6 +191,7 @@ function clearFilters() {
   f.fav = false
   f.damaged = false
   f.unlinked = false
+  f.updates = false
 }
 function openDetail(id: number) {
   selectedId.value = id
@@ -206,6 +218,7 @@ let lastTotal: number | null = null
 watch(
   () => props.active,
   async (a) => {
+    if (a) void refreshUpdates()
     if (a && (await refreshCounts())) {
       void softRefresh()
     }
@@ -216,6 +229,7 @@ onMounted(() => {
   reset()
   void loadFacets()
   void refreshCounts()
+  void refreshUpdates()
 })
 </script>
 
@@ -241,6 +255,8 @@ onMounted(() => {
         <span v-if="f.fav" class="chip" @click="f.fav = false">★ お気に入り ✕</span>
         <span v-if="f.damaged" class="chip warn" @click="f.damaged = false">要修復 ✕</span>
         <span v-if="f.unlinked" class="chip" @click="f.unlinked = false">メタデータ未取得 ✕</span>
+        <span v-if="f.updates" class="chip active" @click="f.updates = false">新バージョンあり ✕</span>
+        <button v-else-if="typeUpdates" class="chip update-chip" @click="f.updates = true">新バージョン {{ typeUpdates }}</button>
       </div>
     </header>
 
@@ -267,6 +283,7 @@ onMounted(() => {
           <label class="check"><input v-model="f.fav" type="checkbox" /> お気に入りのみ</label>
           <label class="check"><input v-model="f.damaged" type="checkbox" /> 要修復（メタデータ破損）のみ</label>
           <label class="check"><input v-model="f.unlinked" type="checkbox" /> メタデータ未取得（Civitai 情報なし）のみ</label>
+          <label class="check"><input v-model="f.updates" type="checkbox" /> Civitai に新しいバージョンがあるもののみ</label>
           <h4>ベースモデル</h4>
           <div class="chips">
             <button v-for="b in facets.base_models" :key="b.name" class="chip" :class="{ active: f.base.includes(b.name) }" @click="toggleBase(b.name)">

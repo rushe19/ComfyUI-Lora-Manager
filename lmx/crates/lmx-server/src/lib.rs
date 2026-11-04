@@ -9,6 +9,8 @@ pub mod watch;
 pub mod preview;
 pub mod search_prefs;
 pub mod state;
+pub mod stats;
+pub mod updates;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -50,6 +52,12 @@ pub fn app(state: Arc<AppState>, web_dir: PathBuf) -> Router {
         .route("/metadata/fetch", post(ops::metadata_start))
         .route("/metadata/preview", post(ops::metadata_preview))
         .route("/metadata/job", get(ops::metadata_job).delete(ops::metadata_cancel))
+        .route("/stats", get(stats::stats))
+        .route("/updates", get(updates::list))
+        .route("/updates/status", get(updates::status))
+        .route("/updates/check", post(updates::start).delete(updates::cancel))
+        .route("/updates/ignore", post(updates::ignore))
+        .route("/updates/auto", axum::routing::put(updates::set_auto))
         .route("/folders", get(api::folders))
         .route("/facets", get(api::facets))
         .route("/preview/{id}", get(preview::preview))

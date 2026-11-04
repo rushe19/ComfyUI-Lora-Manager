@@ -45,6 +45,8 @@ pub struct Query {
     pub damaged_only: bool,
     /// Only models without Civitai metadata (no version id).
     pub unlinked_only: bool,
+    /// Only these model ids (e.g. models with a new version on Civitai).
+    pub only_ids: Option<std::sync::Arc<std::collections::HashSet<i64>>>,
     pub include_excluded: bool,
     pub sort: SortKey,
     pub descending: bool,
@@ -170,6 +172,9 @@ impl Library {
             return false;
         }
         if q.unlinked_only && r.civitai_version_id.is_some() {
+            return false;
+        }
+        if q.only_ids.as_ref().is_some_and(|ids| !ids.contains(&r.id)) {
             return false;
         }
         if q.damaged_only && r.damage.is_none() && r.sidecar_error.is_none() {

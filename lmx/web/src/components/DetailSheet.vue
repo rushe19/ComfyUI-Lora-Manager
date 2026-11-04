@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { ApiError, editModel, fetchDetail, metadataJob, startMetadata, type ModelDetail } from '../api'
+import { ApiError, editModel, fetchDetail, ignoreUpdate, metadataJob, startMetadata, type ModelDetail } from '../api'
 import { trashWithUndo } from '../actions'
 import { closeOverlay, isOpen, openOverlay } from '../overlay'
 import { prefs } from '../prefs'
 import { toast } from '../toast'
-import { copyText, formatDate, formatSize, htmlToText, isMature } from '../util'
+import { accessBadge, copyText, formatDate, formatIsoDate, formatSize, htmlToText, isMature } from '../util'
+import CivitaiModelSheet from './CivitaiModelSheet.vue'
 import EditPanel from './EditPanel.vue'
 import MovePanel from './MovePanel.vue'
 
@@ -83,6 +84,17 @@ onMounted(async () => {
   }
 })
 
+async function ignore(body: { model_id?: number; version_id?: number }, label: string) {
+  try {
+    await ignoreUpdate({ ...body, ignore: true })
+    toast(label)
+    await reload()
+    emit('changed')
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : String(e), 3000)
+  }
+}
+
 async function copy(text: string, label: string) {
   toast((await copyText(text)) ? `${label}をコピーしました` : 'コピーできませんでした')
 }
@@ -131,6 +143,21 @@ async function copy(text: string, label: string) {
             「{{ d.summary.name }}」と付属ファイルを Windows のゴミ箱へ移動します。
             <span class="actions"><button class="danger" @click="doDelete">ゴミ箱へ移動</button><button @click="confirmDelete = false">やめる</button></span>
           </p>
+
+          <section v-if="d.new_versions.length" class="card-box">
+            <h4>Civitai に新しいバージョンがあります</h4>
+            <ul class="new-versions">
+              <li v-for="v in d.new_versions" :key="v.id">
+                <span class="grow"><strong>{{ v.name }}</strong> <small>{{ v.base_model }}<template v-if="v.published_at"> ・ {{ formatIsoDate(v.published_at) }}</template></small></span>
+                <span v-if="v.access" class="badge" :class="v.access.kind">{{ accessBadge(v.access) }}</span>
+                <button class="small" @click="ignore({ version_id: v.id }, 'このバージョンは通知しません')">無視</button>
+              </li>
+            </ul>
+            <div class="actions">
+              <button v-if="d.civitai_model_id" class="primary" @click="openOverlay('update-civ')">ダウンロード画面を開く</button>
+              <button v-if="d.civitai_model_id" @click="ignore({ model_id: d.civitai_model_id }, 'このモデルの新バージョンは通知しません')">このモデルは通知しない</button>
+            </div>
+          </section>
 
           <section v-if="d.trained_words.length">
             <h4>トリガーワード <small>（タップでコピー）</small></h4>
@@ -181,5 +208,6 @@ async function copy(text: string, label: string) {
       <EditPanel v-if="d && isOpen('edit')" :d="d" @saved="onSaved" @close="closeOverlay" />
       <MovePanel v-if="d && isOpen('move')" :d="d" @moved="onMoved" @close="closeOverlay" />
     </article>
+    <CivitaiModelSheet v-if="isOpen('update-civ') && d?.civitai_model_id" :id="d.civitai_model_id" @close="closeOverlay" @queued="emit('changed')" />
   </div>
 </template>

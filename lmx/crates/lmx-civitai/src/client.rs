@@ -232,6 +232,15 @@ impl CivitaiClient {
         Ok((items, capped))
     }
 
+    /// Up to 100 models by id in one request (`/models?ids=`), uncached. Models deleted on
+    /// Civitai are simply missing from the result.
+    pub async fn models_by_ids(&self, ids: &[i64]) -> Result<Vec<Value>, CivitaiError> {
+        let joined = ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+        let q = vec![("ids".to_string(), joined), ("limit".into(), "100".into()), ("nsfw".into(), "true".into())];
+        let v = self.get_json_opt("/models", &q, false, false).await?;
+        Ok(v.get("items").and_then(Value::as_array).cloned().unwrap_or_default())
+    }
+
     /// `/enums` (model types, base models). Not cached here; callers keep their own copy.
     pub async fn enums(&self) -> Result<Value, CivitaiError> {
         self.get_json_opt("/enums", &[], false, false).await

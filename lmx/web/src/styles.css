@@ -291,3 +291,29 @@ button.danger.small, button.small { padding: 4px 8px; font-size: 12px; border-ra
 .thumb .access { position: absolute; left: 6px; top: 6px; font-size: 10px; padding: 1px 6px; border-radius: 6px; color: #fff; max-width: calc(100% - 64px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .thumb .access.early, .badge.early { background: #d97706; color: #fff; }
 .thumb .access.paid, .badge.paid { background: #dc2626; color: #fff; }
+
+/* New version on Civitai */
+.thumb .update-badge { position: absolute; left: 6px; top: 6px; background: #2563eb; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 6px; }
+.badge.info { background: #2563eb; color: #fff; }
+.new-versions { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.new-versions li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border: 1px solid var(--border, #3333); border-radius: 10px; padding: 6px 10px; }
+.new-versions li .grow { flex: 1 1 auto; min-width: 0; }
+.update-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.update-list li { display: flex; gap: 8px; align-items: center; }
+.update-list img { width: 44px; height: 56px; object-fit: cover; border-radius: 6px; flex: none; background: var(--surface-2); }
+.update-list .info { flex: 1 1 auto; min-width: 0; }
+.update-list .info strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Stats */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin: 6px 0; }
+.stat-grid div { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; }
+.stat-grid b { display: block; font-size: 18px; }
+.stat-grid small { color: var(--muted, #888); }
+.bars { list-style: none; margin: 4px 0 10px; padding: 0; display: grid; gap: 3px; }
+.bars li { display: grid; grid-template-columns: minmax(90px, 38%) 1fr auto; gap: 8px; align-items: center; font-size: 12px; }
+.bars li span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bars .bar { height: 8px; border-radius: 4px; background: var(--accent); min-width: 2px; }
+.bars li small { color: var(--muted, #888); white-space: nowrap; }
+.chip.update-chip { border-color: #2563eb; color: #2563eb; }
+.nav-badge.info { background: #2563eb; }
+.seg.mini { display: inline-flex; margin-left: 8px; vertical-align: middle; }
+.seg.mini button { font-size: 11px; padding: 2px 8px; }

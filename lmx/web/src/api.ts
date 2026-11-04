@@ -24,6 +24,8 @@ export interface ModelSummary {
   damaged: boolean
   preview: string | null
   preview_kind: 'image' | 'video' | null
+  /** Civitai has a newer version (same base model) that is not in the library. */
+  update: boolean
 }
 
 export interface ModelPage {
@@ -43,6 +45,7 @@ export interface CivitaiImage {
 
 export interface ModelDetail {
   summary: ModelSummary
+  new_versions: NewVersion[]
   file_path: string
   root: string
   sha256: string | null
@@ -118,6 +121,7 @@ export interface ListParams {
   fav?: boolean
   damaged?: boolean
   unlinked?: boolean
+  updates?: boolean
   sort?: SortKey
   desc?: boolean
   offset?: number
@@ -138,6 +142,7 @@ export function buildListQuery(p: ListParams): string {
   if (p.fav) s.set('fav', '1')
   if (p.damaged) s.set('damaged', '1')
   if (p.unlinked) s.set('unlinked', '1')
+  if (p.updates) s.set('updates', '1')
   if (p.sort && p.sort !== 'name') s.set('sort', p.sort)
   if (p.desc) s.set('order', 'desc')
   if (p.offset) s.set('offset', String(p.offset))
@@ -449,3 +454,91 @@ export const cancelMetadata = () => send<{ canceling: boolean }>('DELETE', '/api
 
 export const fetchBaseModelPrefs = () => send<BaseModelPrefs>('GET', '/api/civitai/base-models')
 export const saveBaseModelPrefs = (selected: string[]) => send<BaseModelPrefs>('PUT', '/api/civitai/base-models', { selected })
+
+// ---- New versions of owned models ----
+
+export interface NewVersion {
+  id: number
+  name: string
+  base_model: string
+  published_at: string | null
+  access: CivAccess | null
+}
+
+export interface UpdateJob {
+  running: boolean
+  canceled: boolean
+  started_at: number
+  finished_at: number | null
+  total: number
+  done: number
+  requests: number
+  errors: number
+  gone: number
+  last_error: string | null
+  auto: boolean
+}
+
+export interface UpdateCounts {
+  models: number
+  /** Models with at least one new version that is free to download now. */
+  free: number
+}
+
+export interface UpdateStatus {
+  job: UpdateJob
+  last_full_check: number | null
+  known_models: number
+  gone: number
+  ignored_models: number
+  ignored_versions: number
+  counts: UpdateCounts
+  by_type: Record<ModelType, UpdateCounts>
+  auto: boolean
+}
+
+export interface UpdateItem {
+  model_id: number
+  remote_name: string | null
+  local: ModelSummary
+  local_version_id: number | null
+  versions: NewVersion[]
+}
+
+export const fetchUpdateStatus = () => getJson<UpdateStatus>('/api/updates/status')
+export const startUpdateCheck = () => send<{ started: boolean }>('POST', '/api/updates/check')
+export const cancelUpdateCheck = () => send<{ ok: boolean }>('DELETE', '/api/updates/check')
+export const fetchUpdates = (type?: ModelType, free = false) =>
+  getJson<{ items: UpdateItem[] }>(`/api/updates?${new URLSearchParams({ ...(type ? { type } : {}), ...(free ? { free: '1' } : {}) })}`)
+export const ignoreUpdate = (b: { model_id?: number; version_id?: number; ignore: boolean }) => send<{ ok: boolean }>('POST', '/api/updates/ignore', b)
+export const setAutoUpdate = (enabled: boolean) => send<{ auto: boolean }>('PUT', '/api/updates/auto', { enabled })
+
+// ---- Library statistics ----
+
+export interface StatRow {
+  name: string
+  count: number
+  size: number
+}
+
+export interface LibraryStats {
+  total: { count: number; size: number }
+  by_type: StatRow[]
+  by_base: StatRow[]
+  by_folder: StatRow[]
+  creators: StatRow[]
+  civitai_models: number
+  linked: number
+  with_preview: number
+  with_sidecar: number
+  damaged: number
+  favorites: number
+  excluded: number
+  duplicates: { groups: number; files: number; reclaimable: number }
+  added_7d: { count: number; size: number }
+  added_30d: { count: number; size: number }
+  largest: { id: number; name: string; size: number }[]
+  updates: number
+}
+
+export const fetchStats = (type?: ModelType) => getJson<LibraryStats>(`/api/stats${type ? `?type=${type}` : ''}`)

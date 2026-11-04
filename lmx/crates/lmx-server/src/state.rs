@@ -35,6 +35,7 @@ pub struct AppState {
     /// Serializes sidecar writes made by lmx (edits, metadata job, moves).
     pub writes: tokio::sync::Mutex<()>,
     pub search: crate::search_prefs::SearchState,
+    pub updates: crate::updates::Updates,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -56,6 +57,7 @@ impl AppState {
             None => lmx_civitai::CivitaiClient::new(&cfg.civitai_host, cfg.civitai_api_key.clone())?,
         };
         let downloads = crate::downloads::Downloads::open(&cfg.data_dir.join("downloads.sqlite"))?;
+        let cfg_data = cfg.data_dir.clone();
         Ok(Arc::new(AppState {
             library: RwLock::new(Arc::new(Library::new(records))),
             cfg,
@@ -71,6 +73,7 @@ impl AppState {
             meta: Default::default(),
             writes: tokio::sync::Mutex::new(()),
             search: Default::default(),
+            updates: crate::updates::Updates::load(&cfg_data.join("updates.json")),
         }))
     }
 

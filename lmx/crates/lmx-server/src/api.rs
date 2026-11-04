@@ -70,6 +70,8 @@ pub struct ListParams {
     pub fav: Option<u8>,
     pub damaged: Option<u8>,
     pub unlinked: Option<u8>,
+    /// Only models with a new version on Civitai.
+    pub updates: Option<u8>,
     pub sort: Option<String>,
     pub order: Option<String>,
     pub offset: Option<usize>,
@@ -92,6 +94,7 @@ impl ListParams {
             favorites_only: self.fav.unwrap_or(0) == 1,
             damaged_only: self.damaged.unwrap_or(0) == 1,
             unlinked_only: self.unlinked.unwrap_or(0) == 1,
+            only_ids: None,
             include_excluded: false,
             sort: SortKey::parse(self.sort.as_deref().unwrap_or("name")),
             descending: self.order.as_deref() == Some("desc"),
@@ -120,6 +123,8 @@ pub struct Summary<'a> {
     pub damaged: bool,
     pub preview: Option<String>,
     pub preview_kind: Option<&'static str>,
+    /// Civitai has a newer version (same base model) that is not in the library.
+    pub update: bool,
 }
 
 pub fn preview_url(r: &ModelRecord) -> Option<String> {
@@ -146,14 +151,26 @@ pub fn summary(r: &ModelRecord) -> Summary<'_> {
         damaged: r.damage.is_some() || r.sidecar_error.is_some(),
         preview: preview_url(r),
         preview_kind: r.preview_path.as_deref().map(|p| if paths::is_video(p) { "video" } else { "image" }),
+        update: false,
     }
 }
 
 pub async fn list_models(State(st): State<Arc<AppState>>, Query(p): Query<ListParams>) -> Json<Value> {
     let lib = st.library();
-    let q = p.to_query();
+    let upd = st.updates.index(&lib);
+    let mut q = p.to_query();
+    if p.updates.unwrap_or(0) == 1 {
+        q.only_ids = Some(std::sync::Arc::new(upd.by_local.keys().copied().collect()));
+    }
     let (page, total) = lib.query(&q);
-    let items: Vec<Summary> = page.iter().map(|r| summary(r)).collect();
+    let items: Vec<Summary> = page
+        .iter()
+        .map(|r| {
+            let mut s = summary(r);
+            s.update = upd.by_local.contains_key(&r.id);
+            s
+        })
+        .collect();
     let next = q.offset + items.len();
     Json(json!({
         "total": total,
@@ -192,7 +209,11 @@ pub fn strength_from_usage_tips(tips: Option<&str>) -> f64 {
 }
 
 pub async fn model_detail(State(st): State<Arc<AppState>>, Path(id): Path<i64>) -> Response {
-    let Some(r) = st.library().get(id) else { return not_found("model") };
+    let lib = st.library();
+    let Some(r) = lib.get(id) else { return not_found("model") };
+    let new_versions = crate::updates::for_local(&st, &lib, id);
+    let mut summary_card = summary(&r);
+    summary_card.update = new_versions.as_array().is_some_and(|a| !a.is_empty());
     // The sidecar is the source of truth for long fields; read it fresh (read-only).
     let side = tokio::task::spawn_blocking({
         let path = paths::sidecar_path(std::path::Path::new(&r.file_path));
@@ -216,7 +237,8 @@ pub async fn model_detail(State(st): State<Arc<AppState>>, Path(id): Path<i64>) 
     });
     let lora_syntax = (r.model_type == ModelType::Lora).then(|| format!("<lora:{}:{}>", r.file_name, fmt_strength(strength)));
     Json(json!({
-        "summary": summary(&r),
+        "summary": summary_card,
+        "new_versions": new_versions,
         "file_path": r.file_path,
         "root": r.root,
         "sha256": r.sha256,

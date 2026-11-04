@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchHealth } from './api'
+import { buildListQuery, fetchHealth } from './api'
 
 const respond = (body: string, contentType: string, status = 200) =>
   vi.fn().mockResolvedValue(new Response(body, { status, headers: { 'content-type': contentType } }))
@@ -20,5 +20,12 @@ describe('fetchHealth', () => {
   it('rejects non-2xx', async () => {
     vi.stubGlobal('fetch', respond('{}', 'application/json', 503))
     await expect(fetchHealth()).rejects.toThrow('HTTP 503')
+  })
+})
+
+describe('buildListQuery updates filter', () => {
+  it('adds updates=1 only when set', () => {
+    expect(buildListQuery({ type: 'lora', updates: true })).toBe('type=lora&updates=1')
+    expect(buildListQuery({ type: 'lora', updates: false })).toBe('type=lora')
   })
 })
