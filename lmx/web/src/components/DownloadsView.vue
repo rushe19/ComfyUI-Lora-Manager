@@ -4,6 +4,7 @@ import { cancelDownload, listDownloads, retryDownload, type DownloadJob } from '
 import { prefs } from '../prefs'
 import { toast } from '../toast'
 import { formatSize, isMature, isVideoUrl } from '../util'
+import LazyVideo from './LazyVideo.vue'
 
 const jobs = ref<DownloadJob[]>([])
 const error = ref('')
@@ -64,7 +65,7 @@ const pct = (j: DownloadJob) => (j.size_bytes ? Math.min(100, Math.round((j.byte
       <h4 v-if="group.list.length">{{ group.title }}</h4>
       <ul class="jobs">
         <li v-for="j in group.list" :key="j.id" :class="j.status">
-          <video v-if="j.image_url && isVideoUrl(j.image_url)" :src="j.image_url" muted playsinline loop autoplay :class="{ blur: prefs.blurMature && isMature(j.nsfw_level) }" />
+          <LazyVideo v-if="j.image_url && isVideoUrl(j.image_url)" :src="j.image_url" pause-behind-overlay :class="{ blur: prefs.blurMature && isMature(j.nsfw_level) }" />
           <img v-else-if="j.image_url" :src="j.image_url" alt="" :class="{ blur: prefs.blurMature && isMature(j.nsfw_level) }" />
           <div class="job-body">
             <strong>{{ j.model_name }}</strong>

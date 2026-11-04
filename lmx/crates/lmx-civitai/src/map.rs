@@ -84,7 +84,8 @@ fn image_view(img: &Value, width: u32) -> Value {
     let url = s(img, "url");
     let kind = s(img, "type");
     json!({
-        "url": if kind == "video" { url.to_string() } else { resize_image_url(url, width) },
+        // Cards show the small transcoded rendition of videos (the original can be tens of MB).
+        "url": preview_rendition_url(url, kind == "video"),
         "full": url,
         "type": if kind.is_empty() { "image" } else { kind },
         "nsfw_level": img.get("nsfwLevel").and_then(Value::as_i64).unwrap_or(0),

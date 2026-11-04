@@ -106,6 +106,13 @@ export function accessBadge(a: { kind: 'early' | 'paid'; ends_at: string | null 
 /** True for Civitai/other media URLs that point at a video. */
 export const isVideoUrl = (url: string) => /\.(mp4|webm)(\?|$)/i.test(url) || /\/transcode=/.test(url)
 
+/** Small (450 px) rendition of a Civitai CDN media url for thumbnails; other urls are returned unchanged. */
+export function thumbUrl(url: string, isVideo: boolean): string {
+  const re = /\/(original=true|width=\d+|transcode=[^/]*)[^/]*\//
+  if (!re.test(url)) return url
+  return url.replace(re, isVideo ? '/transcode=true,width=450,optimized=true/' : '/width=450/')
+}
+
 /** A sharper-than-thumbnail rendition for the fullscreen viewer (Civitai CDN stills only). */
 export function viewerUrl(url: string, isVideo: boolean, width = 1280): string {
   if (isVideo) return url

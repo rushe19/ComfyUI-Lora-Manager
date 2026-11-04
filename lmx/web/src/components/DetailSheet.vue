@@ -5,9 +5,10 @@ import { trashWithUndo } from '../actions'
 import { closeOverlay, isOpen, openOverlay } from '../overlay'
 import { prefs } from '../prefs'
 import { toast } from '../toast'
-import { accessBadge, copyText, formatDate, formatIsoDate, formatSize, htmlToText, isMature, viewerUrl } from '../util'
+import { accessBadge, copyText, formatDate, formatIsoDate, formatSize, htmlToText, isMature, thumbUrl, viewerUrl } from '../util'
 import CivitaiModelSheet from './CivitaiModelSheet.vue'
 import EditPanel from './EditPanel.vue'
+import LazyVideo from './LazyVideo.vue'
 import MediaViewer, { type ViewerItem } from './MediaViewer.vue'
 import MovePanel from './MovePanel.vue'
 
@@ -196,8 +197,8 @@ async function copy(text: string, label: string) {
             <h4>Civitai のサンプル画像 <small>（タップで拡大）</small></h4>
             <div class="strip">
               <button v-for="(img, i) in d.images" :key="img.url" class="strip-item" :aria-label="`サンプル ${i + 1} を拡大`" @click="openViewer(i)">
-                <video v-if="img.type === 'video'" :src="img.url" muted playsinline loop preload="metadata" :class="{ blur: prefs.blurMature && isMature(img.nsfw_level ?? 0) }" />
-                <img v-else :src="img.url" loading="lazy" alt="" :class="{ blur: prefs.blurMature && isMature(img.nsfw_level ?? 0) }" />
+                <LazyVideo v-if="img.type === 'video'" :src="thumbUrl(img.url, true)" :style="{ aspectRatio: (img.width && img.height) ? `${img.width} / ${img.height}` : '3 / 4' }" :class="{ blur: prefs.blurMature && isMature(img.nsfw_level ?? 0) }" />
+                <img v-else :src="thumbUrl(img.url, false)" loading="lazy" decoding="async" alt="" :class="{ blur: prefs.blurMature && isMature(img.nsfw_level ?? 0) }" />
                 <span v-if="img.type === 'video'" class="play-badge">▶</span>
               </button>
             </div>

@@ -6,6 +6,7 @@ import { prefs } from '../prefs'
 import { normalizeFolder, rememberTarget, type Target } from '../targets'
 import { toast } from '../toast'
 import { accessBadge, copyText, formatIsoDate, formatSize, htmlToText, isMature, timeLeft, viewerUrl } from '../util'
+import LazyVideo from './LazyVideo.vue'
 import MediaViewer, { type ViewerItem } from './MediaViewer.vue'
 import TargetPicker from './TargetPicker.vue'
 
@@ -112,7 +113,7 @@ const jobLabel: Record<string, string> = { queued: '待機中', running: 'ダウ
           <template v-if="version">
             <div v-if="version.images.length" class="strip">
               <button v-for="(img, i) in version.images" :key="img.url" class="strip-item" :aria-label="`サンプル ${i + 1} を拡大`" @click="openViewer(i)">
-                <video v-if="img.type === 'video'" :src="img.url" muted playsinline loop preload="metadata" :class="{ blur: prefs.blurMature && isMature(img.nsfw_level) }" />
+                <LazyVideo v-if="img.type === 'video'" :src="img.url" :style="{ aspectRatio: (img.width && img.height) ? `${img.width} / ${img.height}` : '3 / 4' }" :class="{ blur: prefs.blurMature && isMature(img.nsfw_level) }" />
                 <img v-else :src="img.url" alt="" :class="{ blur: prefs.blurMature && isMature(img.nsfw_level) }" />
                 <span v-if="img.type === 'video'" class="play-badge">▶</span>
               </button>

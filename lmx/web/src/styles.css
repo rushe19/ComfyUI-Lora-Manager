@@ -345,3 +345,8 @@ button.chip { font-family: inherit; }
 .viewer-nav.next { right: 0; border-radius: 12px 0 0 12px; }
 .viewer-hint { position: absolute; bottom: calc(18px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); color: #fff; background: rgba(0, 0, 0, 0.55); padding: 4px 12px; border-radius: 999px; font-size: 12px; margin: 0; pointer-events: none; }
 .viewer-hint.err { color: #fca5a5; }
+
+/* Off-screen search result cards are not laid out or painted (long infinite-scroll lists stay light) */
+.civ-grid > .card { content-visibility: auto; contain-intrinsic-size: auto 250px; }
+.strip-item video { background: var(--surface-2); }
+

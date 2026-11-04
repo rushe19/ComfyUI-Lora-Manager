@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ModelSummary } from '../api'
 import { prefs } from '../prefs'
+import LazyVideo from './LazyVideo.vue'
 import { computeGrid, isMature, visibleRows } from '../util'
 
 const props = defineProps<{ items: ModelSummary[]; total: number; loading: boolean; selected?: Set<number> }>()
@@ -104,7 +105,7 @@ function style(index: number) {
         @click="onClick(item.id)"
       >
         <div class="thumb" :class="{ blur: prefs.blurMature && isMature(item.nsfw_level) }">
-          <video v-if="item.preview && item.preview_kind === 'video' && prefs.showVideos" :src="item.preview" muted playsinline loop autoplay preload="metadata" />
+          <LazyVideo v-if="item.preview && item.preview_kind === 'video' && prefs.showVideos" :src="item.preview" pause-behind-overlay />
           <img v-else-if="item.preview && item.preview_kind === 'image'" :src="item.preview" decoding="async" alt="" />
           <div v-else class="noimg">No preview</div>
           <span class="base">{{ item.base_model }}</span>

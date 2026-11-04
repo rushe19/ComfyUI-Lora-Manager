@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeGrid, formatSize, htmlToText, isVideoUrl, viewerUrl, visibleRows } from './util'
+import { computeGrid, formatSize, htmlToText, isVideoUrl, thumbUrl, viewerUrl, visibleRows } from './util'
 import { buildListQuery } from './api'
 
 describe('htmlToText', () => {
@@ -75,5 +75,13 @@ describe('media urls', () => {
     expect(viewerUrl('https://image.civitai.com/k/u/width=450/a.jpeg', false)).toBe('https://image.civitai.com/k/u/width=1280/a.jpeg')
     expect(viewerUrl('https://example.com/a.png', false)).toBe('https://example.com/a.png')
     expect(viewerUrl('https://image.civitai.com/k/u/original=true/a.mp4', true)).toBe('https://image.civitai.com/k/u/original=true/a.mp4')
+  })
+})
+
+describe('thumbUrl', () => {
+  it('uses the small rendition for civitai media only', () => {
+    expect(thumbUrl('https://image.civitai.com/k/u/original=true/a.mp4', true)).toBe('https://image.civitai.com/k/u/transcode=true,width=450,optimized=true/a.mp4')
+    expect(thumbUrl('https://image.civitai.com/k/u/original=true/a.jpeg', false)).toBe('https://image.civitai.com/k/u/width=450/a.jpeg')
+    expect(thumbUrl('https://other.example/a.mp4', true)).toBe('https://other.example/a.mp4')
   })
 })

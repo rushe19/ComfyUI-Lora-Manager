@@ -4,6 +4,7 @@ import { ApiError, civitaiSearch, enqueueUrls, type CivCard, type CivSearchPage,
 import { baseModels, loadBaseModels, orderLike } from '../baseModels'
 import { closeOverlay, isOpen, openOverlay } from '../overlay'
 import { prefs } from '../prefs'
+import LazyVideo from './LazyVideo.vue'
 import { normalizeFolder, rememberTarget, type Target } from '../targets'
 import { toast } from '../toast'
 import { accessBadge, formatIsoDate, isMature } from '../util'
@@ -189,7 +190,10 @@ const urlCount = computed(() => urlText.value.split('\n').filter((l) => l.trim()
       <div class="civ-grid">
         <button v-for="c in items" :key="c.id" class="card static" @click="open(c)">
           <div class="thumb" :class="{ blur: prefs.blurMature && isMature(c.image?.nsfw_level ?? 0) }">
-            <video v-if="c.image && c.image.type === 'video'" :src="c.image.url" muted playsinline loop autoplay preload="metadata" />
+            <template v-if="c.image && c.image.type === 'video'">
+              <LazyVideo v-if="prefs.showVideos" :src="c.image.url" pause-behind-overlay />
+              <div v-else class="noimg">▶ 動画</div>
+            </template>
             <img v-else-if="c.image" :src="c.image.url" decoding="async" alt="" />
             <div v-else class="noimg">No preview</div>
             <span class="base">{{ c.base_models.join(' / ') || c.type }}</span>
