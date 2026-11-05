@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { withBase } from '../base'
 import { computed, onMounted, ref, watch } from 'vue'
 import { ApiError, editModel, fetchDetail, ignoreUpdate, metadataJob, startMetadata, type ModelDetail } from '../api'
 import { trashWithUndo } from '../actions'
@@ -76,7 +77,7 @@ const d = ref<ModelDetail | null>(null)
 const error = ref('')
 const showDesc = ref(false)
 const description = computed(() => (d.value ? htmlToText(d.value.model_description || d.value.version_description) : ''))
-const preview = computed(() => d.value?.summary.preview ?? null)
+const preview = computed(() => (d.value?.summary.preview ? withBase(d.value.summary.preview) : null))
 
 onMounted(async () => {
   try {

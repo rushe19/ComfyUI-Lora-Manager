@@ -2,6 +2,7 @@
 // Settings: new versions of owned models on Civitai (check, auto check, list).
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ApiError, cancelUpdateCheck, fetchUpdates, fetchUpdateStatus, ignoreUpdate, setAutoUpdate, startUpdateCheck, type ModelType, type UpdateItem, type UpdateStatus } from '../api'
+import { withBase } from '../base'
 import { closeOverlay, isOpen, openOverlay } from '../overlay'
 import { prefs } from '../prefs'
 import { toast } from '../toast'
@@ -110,7 +111,7 @@ onBeforeUnmount(() => window.clearTimeout(timer))
         </div>
         <ul class="update-list">
           <li v-for="it in items.slice(0, shown)" :key="it.model_id">
-            <img v-if="it.local.preview && it.local.preview_kind === 'image'" :src="it.local.preview" alt="" loading="lazy" :class="{ blur: prefs.blurMature && isMature(it.local.nsfw_level) }" />
+            <img v-if="it.local.preview && it.local.preview_kind === 'image'" :src="withBase(it.local.preview)" alt="" loading="lazy" :class="{ blur: prefs.blurMature && isMature(it.local.nsfw_level) }" />
             <span v-else class="noimg" style="width: 44px; height: 56px"></span>
             <div class="info">
               <strong>{{ it.local.name }}</strong>

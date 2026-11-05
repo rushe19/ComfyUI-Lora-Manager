@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { withBase } from '../base'
 // Settings: download / restore lmx's own settings (model data needs no backup).
 import { ref } from 'vue'
 import { toast } from '../toast'
@@ -35,7 +36,7 @@ async function restore(ev: Event) {
       モデルの一覧はスキャンで作り直せるので含みません。lmx.toml は参考として入れます（API キーは伏せ字）。
     </p>
     <div class="actions">
-      <a class="button" href="/api/backup" download="lmx-settings.json">ダウンロード</a>
+      <a class="button" :href="withBase('/api/backup')" download="lmx-settings.json">ダウンロード</a>
       <label class="button" :class="{ disabled: busy }">
         読み込む<input type="file" accept="application/json,.json" hidden :disabled="busy" @change="restore" />
       </label>

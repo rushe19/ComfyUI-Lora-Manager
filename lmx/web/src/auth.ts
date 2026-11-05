@@ -1,13 +1,14 @@
 // Optional password: notice "login required" answers from any API call and show the login screen.
 import { reactive } from 'vue'
+import { withBase } from './base'
 
 export const auth = reactive({ required: false, enabled: false })
 
 /** Wrap fetch once: a 401 marked `x-lmx-auth: required` means the session is missing or expired. */
 export function watchAuth() {
   const orig = window.fetch.bind(window)
-  window.fetch = async (...args: Parameters<typeof fetch>) => {
-    const res = await orig(...args)
+  window.fetch = async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    const res = await orig(typeof input === 'string' ? withBase(input) : input, init)
     if (res.status === 401 && res.headers.get('x-lmx-auth') === 'required') auth.required = true
     return res
   }
