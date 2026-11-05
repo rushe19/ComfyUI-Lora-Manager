@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { ApiError, civitaiModel, enqueueDownload, type CivFile, type CivModel, type CivVersion } from '../api'
+import { trashWithUndo } from '../actions'
+import { ApiError, civitaiModel, enqueueDownload, fetchDetail, type CivFile, type CivModel, type CivVersion } from '../api'
 import { checkFavorites, favs, toggleFavorite } from '../civFavorites'
 import { autoStem, chosenName, splitFileName } from '../fileName'
 import { closeOverlay, isOpen, openOverlay } from '../overlay'
@@ -13,7 +14,8 @@ import MediaViewer, { type ViewerItem } from './MediaViewer.vue'
 import TargetPicker from './TargetPicker.vue'
 
 const props = defineProps<{ id: number }>()
-const emit = defineEmits<{ (e: 'close'): void; (e: 'queued'): void }>()
+// `changed`: a library file was moved to the Recycle Bin or brought back (the model id is the library's).
+const emit = defineEmits<{ (e: 'close'): void; (e: 'queued'): void; (e: 'changed', libraryId: number): void }>()
 
 const m = ref<CivModel | null>(null)
 const error = ref('')
@@ -110,6 +112,33 @@ async function confirm() {
     busy.value = false
   }
 }
+// Delete an owned file from here (typical case: a new version was downloaded, the old one goes).
+const delTarget = ref<{ id: number; label: string } | null>(null)
+const delBusy = ref(false)
+async function askDelete(f: CivFile) {
+  if (!f.owned_local_id || delBusy.value) return
+  delBusy.value = true
+  try {
+    // Show the real local file, not Civitai's name: it may have been renamed or moved.
+    const d = await fetchDetail(f.owned_local_id)
+    const folder = d.summary.folder ? `${d.summary.folder}/` : ''
+    delTarget.value = { id: f.owned_local_id, label: `${folder}${d.file_path.split(/[\\/]/).pop()}` }
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : String(e), 3000)
+  } finally {
+    delBusy.value = false
+  }
+}
+async function doDelete() {
+  const t = delTarget.value
+  if (!t) return
+  delTarget.value = null
+  await trashWithUndo(t.id, () => {
+    emit('changed', t.id)
+    void load()
+  })
+}
+
 function useModelVersionName() {
   if (!m.value || !picking.value) return
   stem.value = autoStem(m.value.name, picking.value.version.name, m.value.lmx_type)
@@ -193,13 +222,20 @@ const jobLabel: Record<string, string> = { queued: '待機中', running: 'ダウ
             <p v-if="version.availability && version.availability !== 'Public'" class="warn-box">公開状態: {{ version.availability }}（API キーやアクセス権が必要な場合があります）</p>
 
             <h4>ファイル</h4>
+            <p v-if="delTarget" class="warn-box">
+              ライブラリの「<span class="mono">{{ delTarget.label }}</span>」と付属ファイルを Windows のゴミ箱へ移動します。ゴミ箱から元に戻すこともできます。
+              <span class="actions"><button class="danger" @click="doDelete">ゴミ箱へ移動</button><button @click="delTarget = null">やめる</button></span>
+            </p>
             <ul class="files">
               <li v-for="f in version.files" :key="f.id">
                 <div class="file-info">
                   <strong>{{ f.name }}</strong>
                   <small>{{ f.type }} ・ {{ formatSize(f.size_kb * 1024) }}<template v-if="f.fp"> ・ {{ f.fp }}</template><template v-if="f.primary"> ・ 推奨</template></small>
                 </div>
-                <span v-if="f.owned_local_id" class="badge ok">所持</span>
+                <template v-if="f.owned_local_id">
+                  <span class="badge ok">所持</span>
+                  <button class="danger small" :disabled="delBusy" @click="askDelete(f)">🗑 削除</button>
+                </template>
                 <button v-else class="primary small" :disabled="!!version.job && ['queued', 'running'].includes(version.job)" @click="startDownload(f)">ダウンロード</button>
               </li>
             </ul>

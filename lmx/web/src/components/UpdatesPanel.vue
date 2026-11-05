@@ -128,6 +128,6 @@ onBeforeUnmount(() => window.clearTimeout(timer))
         <button v-if="items.length > shown" class="link" @click="shown += 50">もっと見る（残り {{ items.length - shown }} 件）</button>
       </template>
     </template>
-    <CivitaiModelSheet v-if="isOpen('update-civ-list') && openId != null" :id="openId" @close="closeOverlay" @queued="refresh()" />
+    <CivitaiModelSheet v-if="isOpen('update-civ-list') && openId != null" :id="openId" @close="closeOverlay" @queued="refresh()" @changed="refresh()" />
   </div>
 </template>

@@ -56,6 +56,28 @@ async function fetchMeta() {
   }
 }
 
+// A file was deleted (or restored) from the Civitai sheet opened on top of this one. If it was the model
+// shown here, this sheet has nothing left to show: close it together with the Civitai sheet.
+const goneUnderCiv = ref(false)
+async function onCivChanged() {
+  emit('changed')
+  try {
+    await reload()
+    goneUnderCiv.value = false
+  } catch {
+    goneUnderCiv.value = true
+  }
+}
+watch(
+  () => isOpen('update-civ'),
+  (open) => {
+    if (!open && goneUnderCiv.value) {
+      goneUnderCiv.value = false
+      emit('close')
+    }
+  },
+)
+
 async function doDelete() {
   if (!d.value) return
   confirmDelete.value = false
@@ -229,6 +251,6 @@ async function copy(text: string, label: string) {
       <MovePanel v-if="d && isOpen('move')" :d="d" @moved="onMoved" @close="closeOverlay" />
     </article>
     <MediaViewer v-if="viewer && isOpen('viewer-detail')" :items="viewer.items" :start="viewer.start" @close="closeOverlay" />
-    <CivitaiModelSheet v-if="isOpen('update-civ') && d?.civitai_model_id" :id="d.civitai_model_id" @close="closeOverlay" @queued="emit('changed')" />
+    <CivitaiModelSheet v-if="isOpen('update-civ') && d?.civitai_model_id" :id="d.civitai_model_id" @close="closeOverlay" @queued="emit('changed')" @changed="onCivChanged" />
   </div>
 </template>
