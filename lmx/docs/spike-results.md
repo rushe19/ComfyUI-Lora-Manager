@@ -1,6 +1,6 @@
 # Phase 0 スパイク結果（2026-11-04）
 
-計測マシン: 開発 PC（32 スレッド / RAM 126 GB）、モデル置き場 H: = WD_BLACK SN850X 8TB（NVMe）。
+計測マシン: 開発 PC（32 スレッド / RAM 126 GB）、モデル置き場は NVMe SSD（8 TB）。
 本家 LoRA Manager（`<LoRA Manager のインストール先>`）のファイルは読み取り専用で参照し、変更していない。
 
 ## T0-1 Civitai 検索品質 → 問題なし（当初の懸念は誤り）
@@ -66,4 +66,4 @@
 
 - Chrome（CDP）で `http://127.0.0.1:9100/` を開き、`Page.getInstallabilityErrors` = **[]**、`Page.getAppManifest` のエラー = **[]**、Service Worker = **active**。
 - manifest は `application/manifest+json`、アイコンは any 192/512・maskable 192/512・apple-touch 180。
-- Android 実機では `http://<LAN IP>` だとインストールできないため、Tailscale Serve の **10000 番**（443/8443 は使用中）で HTTPS 化して確認する。実機での確認は利用者にお願いする。
+- Android 実機では `http://<LAN IP>` だとインストールできないため、Tailscale Serve の空きポート（ここでは **10000 番**）で HTTPS 化して確認する。実機での確認は利用者にお願いする。

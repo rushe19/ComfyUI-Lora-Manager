@@ -46,7 +46,7 @@ const suggested = computed(() => suggestFolders(targets.value?.folders ?? [], pr
       </label>
       <label class="field">
         <span>フォルダ（新しい名前も入力できます）</span>
-        <input v-model="model.folder" type="text" placeholder="例: Character/Frieren（空ならルート直下）" />
+        <input v-model="model.folder" type="text" placeholder="例: Character/Name（空ならルート直下）" />
       </label>
       <div v-if="suggested.length" class="chips">
         <span class="hint">おすすめ:</span>

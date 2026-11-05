@@ -14,7 +14,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\stop-lmx.ps1    # �
 
 ## スマホから使う（PWA）
 
-Android は https のページしかアプリとしてインストールできない。Tailscale Serve で https にする:
+Android は https のページしかアプリとしてインストールできない。https にする方法の一例として、Tailscale Serve を使う:
 
 ```bash
 tailscale serve --bg --https=10000 http://127.0.0.1:9100
@@ -23,7 +23,7 @@ tailscale serve --bg --https=10000 http://127.0.0.1:9100
 スマホの Chrome で `https://<machine>.<tailnet>.ts.net:10000/` を開き、メニューの「アプリをインストール」。
 
 - Tailscale のアドレスは tailnet の中からしか開けない。
-- LAN の `http://<PC の IP>:9100` はファイアウォールで閉じている（2026-11 時点）。開けるときは先に「設定 → パスワード」を設定しておく。
+- LAN の `http://<PC の IP>:9100` で開く場合は、ファイアウォールの設定しだいで届かないことがある。LAN に開けるときは、先に「設定 → パスワード」を設定しておく。
 
 ## 設定画面でできること
 

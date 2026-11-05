@@ -20,7 +20,7 @@
 | 本家の規模 | Python 約 21.5 万行（テスト込み）、static JS 約 12 万行、API ルート 143 以上、画面: loras / checkpoints / embeddings / other / recipes / statistics / workflows | `git ls-files \| wc -l` 系 |
 | ライブラリ規模 | catalog 15,750 件（LoRA 15,402 / checkpoint 227 / embedding 107 / other 15） | `cache/model/default.sqlite` を読み取り専用で集計・起動ログ |
 | 本家の性能 | 一覧 API（50件）0.17〜0.33 s、`/loras` HTML 230 KB、RSS 約 311 MB、起動〜キャッシュ復元 約 1.2 s、初回フルスキャン 約 94 分（0.3〜0.4 s/ファイル） | curl 計測・PowerShell・起動ログ・前回デプロイ記録 |
-| ストレージ | モデル置き場 H: は WD_BLACK SN850X 8TB（NVMe SSD）→ 並列ハッシュで短縮できる見込み（**未計測**、Phase 0 で検証） | `Get-PhysicalDisk` |
+| ストレージ | モデル置き場は NVMe SSD（8 TB）→ 並列ハッシュで短縮できる見込み（**未計測**、Phase 0 で検証） | `Get-PhysicalDisk` |
 | Civitai 検索 API | `GET https://civitai.red/api/v1/models?query=&types=LORA&baseModels=&sort=&nsfw=true&cursor=` はキー無しで 200・約 0.2〜0.3 s。cursor ページングあり。**CORS ヘッダ無し → ブラウザ直叩き不可、サーバー経由のプロキシ必須** | `civ_probe.py` |
 | 検索品質 | ~~フィルタ無し `query=miku` が 4 件~~ → **誤り**（`limit=5` で取ったため）。`limit=100` では 20 クエリすべて 91〜100 件・関連性良好・日本語も可。1 ページの件数が limit 未満になることはあるが cursor で続きが取れる。外れ値で 17.6 s の応答が 1 回 | `civ_quality.py`（Phase 0 T0-1） |
 | 本家サイドカー | キー: file_name, model_name, file_path, size, modified, sha256, base_model, preview_url, preview_nsfw_level, notes, from_civitai, civitai, tags, modelDescription, civitai_deleted, favorite, exclude, db_checked, skip_metadata_refresh, metadata_source, last_checked_at, hash_status, autov3, quantization, usage_tips, sub_type | 実ファイル 1 件を確認（全件の揺れは Phase 0 で調査） |
@@ -29,7 +29,7 @@
 | 利用実態 | レシピ 0 件、example images パス未設定 → この2機能は後回しで良い | 起動ログ |
 | ローカル archive DB | `<LoRA Manager>\civitai\civitai.sqlite`（4.2 GB、models 526,831 / model_versions 684,956 / model_files 717,362）。**`model_files.sha256` に索引が無く、本家のハッシュ照会は毎回全件走査で 0.34〜0.38 s/件**（15.4k 件なら照会だけで約 92 分） | `archive_bench.py`（EXPLAIN QUERY PLAN = `SCAN model_files`） |
 | archive DB の当たり率 | sha256 列だけを一括抽出すると 716,694 行が 0.8 s。手元の LoRA 15,402 件と照合して **8,425 件（54.7%）がヒット、照合自体は 19 ms** | 同上 |
-| Tailscale | 443→127.0.0.1:3080、8443→127.0.0.1:5555 が使用中（tailnet 限定）。Android 端末 2 台が tailnet 登録済み（計測時はオフライン） | `tailscale serve status` / `tailscale status` |
+| Tailscale | Serve で公開するポートは、ほかのサービスが使っていない空きを選ぶ（tailnet 限定） | `tailscale serve status` |
 
 ## 1. 技術選定
 
@@ -112,7 +112,7 @@ lmx/                         ← フォーク内の新ディレクトリ（Q3）
    - 作成した `metadata.json` には `metadata_source: "archive_db"` を記録し、後から CivitAI で上書き更新できるようにする（本家と同じ値なので互換）。
    - archive の data 列は Civitai API と同形の JSON。本家 `_get_version_with_model_data` と同じ組み立て方（version 行 + model 行 + files）を移植し、出力 JSON を本家と突き合わせるテストを置く。
 8. **Android に PWA としてインストールできること（利用者要望）。** Chrome/Samsung Internet で WebAPK（ランチャーに本物のアプリとして出る形）になる条件をすべて満たす。
-   - **安全なオリジン:** `http://<LAN IP>` では WebAPK にならない（Web の仕様）。Tailscale Serve の空いているポートで HTTPS 化する: `tailscale serve --bg --https=10000 http://127.0.0.1:9100` → `https://<machine>.<tailnet>.ts.net:10000/`（443 と 8443 は使用中なので避ける）。
+   - **安全なオリジン:** `http://<LAN IP>` では WebAPK にならない（Web の仕様）。Tailscale Serve の空いているポートで HTTPS 化する: `tailscale serve --bg --https=10000 http://127.0.0.1:9100` → `https://<machine>.<tailnet>.ts.net:10000/`（ほかのサービスが使っているポートは避ける）。
    - **manifest.webmanifest:** `name` / `short_name` / `start_url: "/"` / `scope: "/"` / `display: "standalone"` / `theme_color` / `background_color` / `icons` に 192×192 と 512×512（`purpose: "any"` と `"maskable"` を別エントリで）。
    - **Service Worker:** アプリシェル（HTML/JS/CSS/アイコン）をキャッシュし、`/api/*` は常にネットワーク優先、サムネイルは容量上限付きキャッシュ。オフライン時は「サーバーに接続できません」画面を出す。
    - **スマホらしさ:** 戻るボタンでモーダルが閉じる（History API）、セーフエリア対応（`viewport-fit=cover`）、プル更新、長押しメニュー。
@@ -143,11 +143,11 @@ lmx/                         ← フォーク内の新ディレクトリ（Q3）
 - **T0-1 Civitai 検索品質:** 同じクエリ 20 個（日本語キャラ名・英語・作者名）で v1 API の件数・順位を、サイトの検索結果と比較。弱ければ代替（サイトが使う検索バックエンドの利用可否、規約上の扱い）を調査し採否を決める。
 - **T0-2 ダウンロード認証:** `civitai.red` で API キー付きダウンロード（`Authorization: Bearer`）がリダイレクト先まで通るか、Range 再開が効くか、NSFW モデルで可否を確認（小さいファイルで実施）。
 - **T0-3 サイドカー全数調査:** 15.7k 件のキー出現頻度・型の揺れ・`civitai` オブジェクトの形を集計し、`tests/fixtures/sidecars/` に代表 30 件を匿名化せず保存（ローカル限定、コミット対象外に）。
-- **T0-4 ハッシュ速度:** H: 上の 50 ファイルで、Rust の sha2(asm) 単スレッド / rayon 2・4・8 並列の MB/s を計測し、既定並列数を決める。
+- **T0-4 ハッシュ速度:** モデル置き場上の 50 ファイルで、Rust の sha2(asm) 単スレッド / rayon 2・4・8 並列の MB/s を計測し、既定並列数を決める。
 - **T0-5 雛形:** `cargo new --lib` で workspace、`lmx-server` に `/api/health` だけ返す axum、`web/` に Vite + Vue 3 + TS。`cargo test` と `npm run build` が通ること。
 
 - **T0-6 archive DB:** 索引の有無・照会速度・一括抽出速度・手元ライブラリとの当たり率を計測（**実施済み**: 0.36 s/件の全件走査、一括抽出 0.8 s、当たり率 54.7%）。archive の JSON から作る `metadata.json` を本家の出力と 5 件で突き合わせる。
-- **T0-7 PWA の前提:** Tailscale Serve の空きポート確認（**実施済み**: 443/8443 使用中 → 10000 を使う）、雛形に manifest・アイコン・Service Worker を入れて Lighthouse／DevTools でインストール可能判定を確認。
+- **T0-7 PWA の前提:** Tailscale Serve の空きポート確認（**実施済み**: 空きポート 10000 を使う）、雛形に manifest・アイコン・Service Worker を入れて Lighthouse／DevTools でインストール可能判定を確認。
 
 完了条件: 7 項目すべての結果が spike-results.md にある。（未決事項 Q1〜Q6 は 2026-11-04 に「すべておすすめ通り」で決定済み）
 
