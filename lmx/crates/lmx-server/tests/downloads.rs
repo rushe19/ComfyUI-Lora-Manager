@@ -4,7 +4,10 @@ use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use axum::Router;
 use lmx_core::{config::Roots, downloads::JobStatus, Config};
-use lmx_server::{civitai_api::build_job, downloads, AppState};
+use lmx_server::{
+    civitai_api::{build_job, name_in_use, suggest_name},
+    downloads, AppState,
+};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use tower_http::services::ServeDir;
@@ -164,4 +167,53 @@ async fn video_only_version_gets_a_single_mp4_preview() {
     assert_eq!(files, ["vid_lora.metadata.json", "vid_lora.preview.mp4", "vid_lora.safetensors"], "only one sample is downloaded");
     let side: Value = serde_json::from_str(&std::fs::read_to_string(e.root.join("Vid/vid_lora.metadata.json")).unwrap()).unwrap();
     assert!(side["preview_url"].as_str().unwrap().ends_with("vid_lora.preview.mp4"));
+}
+
+/// The user renames the file before downloading: the file, its sidecar and preview all use the new name.
+#[tokio::test(flavor = "multi_thread")]
+async fn renamed_download_saves_everything_under_the_new_name() {
+    let e = env("renamed").await;
+    let sha = hex::encode(Sha256::digest(&e.blob));
+    let mut job = job_for(&e, sha);
+    job.file_name = lmx_core::paths::renamed_download("my frieren", &job.file_name).unwrap();
+    assert_eq!(job.file_name, "my frieren.safetensors");
+    let job = e.state.downloads.enqueue(job).unwrap();
+    downloads::run_job(&e.state, job.id).await;
+    let done = e.state.downloads.get(job.id).unwrap();
+    assert_eq!(done.status, JobStatus::Done, "{:?}", done.error);
+    assert_eq!(std::fs::read(e.root.join("New/Sub/my frieren.safetensors")).unwrap(), e.blob);
+    assert!(e.root.join("New/Sub/my frieren.metadata.json").exists());
+    assert!(e.root.join("New/Sub/my frieren.preview.jpeg").exists());
+    assert!(!e.root.join("New/Sub/frieren_test.safetensors").exists());
+}
+
+/// A taken name is noticed before anything is queued: the file, a sidecar of another extension, or a queued job.
+#[tokio::test(flavor = "multi_thread")]
+async fn taken_names_are_detected_and_a_free_one_is_suggested() {
+    let e = env("taken").await;
+    let dir = e.root.join("New/Sub");
+    std::fs::create_dir_all(&dir).unwrap();
+    let d = lmx_core::paths::norm(&dir);
+    assert!(!name_in_use(&e.state, &d, "a.safetensors"));
+
+    std::fs::write(dir.join("a.safetensors"), b"x").unwrap();
+    assert!(name_in_use(&e.state, &d, "a.safetensors"), "the file itself");
+    assert!(name_in_use(&e.state, &d, "A.SAFETENSORS"), "Windows file names ignore case");
+
+    std::fs::write(dir.join("b.metadata.json"), b"{}").unwrap();
+    assert!(name_in_use(&e.state, &d, "b.ckpt"), "the sidecar of b.* would be overwritten");
+
+    let sha = hex::encode(Sha256::digest(&e.blob));
+    let mut queued = job_for(&e, sha.clone());
+    queued.file_name = "c.safetensors".into();
+    e.state.downloads.enqueue(queued).unwrap();
+    assert!(name_in_use(&e.state, &d, "c.safetensors"), "a queued download will create it");
+    let mut other = job_for(&e, sha);
+    other.version_id += 1;
+    other.file_name = "c.safetensors".into();
+    assert!(e.state.downloads.enqueue(other).is_err(), "two downloads must not write the same file");
+
+    assert_eq!(suggest_name(&e.state, &d, "a.safetensors"), "a_2.safetensors");
+    std::fs::write(dir.join("a_2.safetensors"), b"x").unwrap();
+    assert_eq!(suggest_name(&e.state, &d, "a.safetensors"), "a_3.safetensors", "skips names that are taken too");
 }

@@ -319,6 +319,8 @@ export class ApiError extends Error {
     public code: string,
     message: string,
     public status: number,
+    /** A free alternative the server found (name conflicts). */
+    public suggested?: string,
   ) {
     super(message)
   }
@@ -334,8 +336,8 @@ async function send<T>(method: string, path: string, body?: unknown, signal?: Ab
   const ct = res.headers.get('content-type') ?? ''
   const data = ct.includes('application/json') ? await res.json() : null
   if (!res.ok) {
-    const d = (data ?? {}) as { error?: string; message?: string }
-    throw new ApiError(d.error ?? 'http', d.message ?? `HTTP ${res.status}`, res.status)
+    const d = (data ?? {}) as { error?: string; message?: string; suggested?: string }
+    throw new ApiError(d.error ?? 'http', d.message ?? `HTTP ${res.status}`, res.status, d.suggested)
   }
   if (data === null) throw new Error(`unexpected content-type: ${ct}`)
   return data as T
@@ -361,7 +363,7 @@ export const civitaiFavorites = (ids: number[]) => send<{ favorite: number[]; ha
 /** Favorite / un-favorite on Civitai; resolves to the state Civitai reports afterwards. */
 export const setCivitaiFavorite = (id: number, on: boolean) => send<{ favorite: boolean }>('PUT', `/api/civitai/models/${id}/favorite`, { on })
 export const downloadTargets = (type: ModelType) => send<Targets>('GET', `/api/download-targets?type=${type}`)
-export const enqueueDownload = (b: { model_id: number; version_id: number; file_id?: number | null; root?: string | null; folder: string }) =>
+export const enqueueDownload = (b: { model_id: number; version_id: number; file_id?: number | null; root?: string | null; folder: string; name?: string }) =>
   send<{ job: DownloadJob }>('POST', '/api/downloads', b)
 export const enqueueUrls = (b: { text: string; type: ModelType; root?: string | null; folder: string }) =>
   send<{ results: { input: string; ok: boolean; job?: DownloadJob; error?: string }[] }>('POST', '/api/downloads/urls', b)

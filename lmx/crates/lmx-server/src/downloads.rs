@@ -76,6 +76,14 @@ impl Downloads {
         self.jobs.lock().expect("jobs lock").iter().find(|j| j.id == id).cloned()
     }
 
+    /// Whether a queued / running download already targets this folder and file name (the sidecar shares the
+    /// stem, so `a.ckpt` and `a.safetensors` count as the same name).
+    pub fn name_taken(&self, dir: &str, file: &str) -> bool {
+        let key = |d: &str, f: &str| (paths::norm(Path::new(d)).to_lowercase(), paths::stem_path(Path::new(f)).to_string_lossy().to_lowercase());
+        let want = key(dir, file);
+        self.jobs.lock().expect("jobs lock").iter().any(|j| j.status.is_active() && key(&j.dest_dir, &j.file_name) == want)
+    }
+
     pub fn enqueue(&self, mut job: DownloadJob) -> anyhow::Result<DownloadJob> {
         {
             let jobs = self.jobs.lock().expect("jobs lock");
@@ -83,6 +91,7 @@ impl Downloads {
                 anyhow::bail!("既にダウンロード待ちです（ジョブ {}）", dup.id);
             }
         }
+        anyhow::ensure!(!self.name_taken(&job.dest_dir, &job.file_name), "同じ保存先・同じ名前のダウンロードが、既に待っています: {}", job.file_name);
         job.created_at = now();
         job.updated_at = job.created_at;
         job.status = JobStatus::Queued;

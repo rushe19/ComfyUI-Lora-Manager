@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ApiError, civitaiModel, enqueueDownload, type CivFile, type CivModel, type CivVersion } from '../api'
 import { checkFavorites, favs, toggleFavorite } from '../civFavorites'
+import { chosenName, splitFileName } from '../fileName'
 import { closeOverlay, isOpen, openOverlay } from '../overlay'
 import { prefs } from '../prefs'
 import { normalizeFolder, rememberTarget, type Target } from '../targets'
@@ -21,6 +22,10 @@ const picking = ref<{ version: CivVersion; file: CivFile } | null>(null)
 const target = ref<Target>({ root: null, folder: '' })
 const busy = ref(false)
 const showDesc = ref(false)
+const stem = ref('')
+const nameError = ref('')
+const suggested = ref('')
+const ext = computed(() => (picking.value ? splitFileName(picking.value.file.name).ext : ''))
 
 const version = computed(() => m.value?.versions[vIndex.value] ?? null)
 const description = computed(() => htmlToText(version.value?.description || m.value?.description || ''))
@@ -62,6 +67,9 @@ function onFavTap() {
 function startDownload(file: CivFile) {
   if (!version.value) return
   picking.value = { version: version.value, file }
+  stem.value = splitFileName(file.name).stem
+  nameError.value = ''
+  suggested.value = ''
   openOverlay('picker')
 }
 // The Android back button closes the picker through the overlay stack.
@@ -77,17 +85,35 @@ async function confirm() {
   busy.value = true
   const folder = normalizeFolder(target.value.folder)
   try {
-    await enqueueDownload({ model_id: m.value.id, version_id: picking.value.version.id, file_id: picking.value.file.id, root: target.value.root, folder })
+    await enqueueDownload({
+      model_id: m.value.id,
+      version_id: picking.value.version.id,
+      file_id: picking.value.file.id,
+      root: target.value.root,
+      folder,
+      name: chosenName(stem.value, picking.value.file.name),
+    })
     rememberTarget(m.value.lmx_type, { root: target.value.root, folder })
     toast('ダウンロードに追加しました')
     closeOverlay()
     emit('queued')
     await load()
   } catch (e) {
-    toast(e instanceof ApiError ? e.message : String(e), 3000)
+    if (e instanceof ApiError && (e.code === 'name_exists' || e.code === 'invalid_name')) {
+      // Stay in the picker: the name is the only thing to fix.
+      nameError.value = e.message
+      suggested.value = e.suggested ? splitFileName(e.suggested).stem : ''
+    } else {
+      toast(e instanceof ApiError ? e.message : String(e), 3000)
+    }
   } finally {
     busy.value = false
   }
+}
+function useSuggested() {
+  stem.value = suggested.value
+  nameError.value = ''
+  suggested.value = ''
 }
 
 const viewer = ref<{ items: ViewerItem[]; start: number } | null>(null)
@@ -197,7 +223,21 @@ const jobLabel: Record<string, string> = { queued: '待機中', running: 'ダウ
           <button class="close" aria-label="閉じる" @click="closeOverlay">✕</button>
         </header>
         <div class="sheet-body">
-          <p class="mono">{{ picking.file.name }}</p>
+          <label class="field name-field">
+            <span>ファイル名（拡張子は <code>{{ ext || 'なし' }}</code> のまま）</span>
+            <span class="name-row">
+              <input v-model="stem" type="text" autocapitalize="off" autocomplete="off" spellcheck="false" :placeholder="splitFileName(picking.file.name).stem" @input="nameError = ''" />
+              <code class="ext">{{ ext }}</code>
+            </span>
+          </label>
+          <p v-if="stem.trim() !== splitFileName(picking.file.name).stem" class="hint name-hint">
+            Civitai の名前: <span class="mono">{{ picking.file.name }}</span>
+            <button type="button" class="link" @click="stem = splitFileName(picking.file.name).stem; nameError = ''; suggested = ''">元に戻す</button>
+          </p>
+          <p v-if="nameError" class="warn-box">
+            {{ nameError }}
+            <span v-if="suggested" class="actions"><button type="button" @click="useSuggested">「{{ suggested }}」にする</button></span>
+          </p>
           <TargetPicker v-model="target" :type="m.lmx_type" :base-model="picking.version.base_model" />
           <div class="actions">
             <button class="primary" :disabled="busy" @click="confirm">ここにダウンロード</button>

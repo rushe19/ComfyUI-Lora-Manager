@@ -185,6 +185,9 @@ pub struct EnqueueBody {
     pub root: Option<String>,
     #[serde(default)]
     pub folder: String,
+    /// File name chosen by the user (the real extension is kept). Empty / missing: Civitai's own name.
+    #[serde(default)]
+    pub name: Option<String>,
 }
 
 /// Build a job from a `/models/{id}` payload.
@@ -253,6 +256,29 @@ pub fn build_job(st: &AppState, model: &Value, version_id: Option<i64>, file_id:
     })
 }
 
+/// A file (or its sidecar) with this name is already in the folder, or a download is already going to make one.
+pub fn name_in_use(st: &AppState, dir: &str, file: &str) -> bool {
+    let dest = std::path::Path::new(dir).join(file);
+    dest.exists() || paths::sidecar_path(&dest).exists() || st.downloads.name_taken(dir, file)
+}
+
+/// First free `<stem>_2.<ext>`, `<stem>_3.<ext>`, ... next to a taken name.
+pub fn suggest_name(st: &AppState, dir: &str, file: &str) -> String {
+    let p = std::path::Path::new(file);
+    let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or(file);
+    let ext = p.extension().and_then(|e| e.to_str()).map(|e| format!(".{e}")).unwrap_or_default();
+    (2..1000).map(|n| format!("{stem}_{n}{ext}")).find(|c| !name_in_use(st, dir, c)).unwrap_or_else(|| format!("{stem}_copy{ext}"))
+}
+
+fn name_taken_response(st: &AppState, job: &DownloadJob) -> Response {
+    let suggested = suggest_name(st, &job.dest_dir, &job.file_name);
+    (
+        StatusCode::CONFLICT,
+        Json(json!({ "error": "name_exists", "message": format!("同じ名前のファイルが、この保存先に既にあります: {}", job.file_name), "suggested": suggested })),
+    )
+        .into_response()
+}
+
 fn owned_already(st: &AppState, job: &DownloadJob) -> Option<i64> {
     let lib = st.library();
     job.sha256.as_ref().and_then(|s| lib.sha_index().get(s).copied())
@@ -263,12 +289,21 @@ pub async fn enqueue(State(st): State<Arc<AppState>>, Json(b): Json<EnqueueBody>
         Ok(v) => v,
         Err(e) => return civitai_err(e),
     };
-    let job = match build_job(&st, &model, b.version_id, b.file_id, b.root.as_deref(), &b.folder) {
+    let mut job = match build_job(&st, &model, b.version_id, b.file_id, b.root.as_deref(), &b.folder) {
         Ok(j) => j,
         Err(e) => return err(StatusCode::BAD_REQUEST, "invalid", e.to_string()),
     };
+    if let Some(requested) = b.name.as_deref().filter(|n| !n.trim().is_empty()) {
+        match paths::renamed_download(requested, &job.file_name) {
+            Some(n) => job.file_name = n,
+            None => return err(StatusCode::BAD_REQUEST, "invalid_name", "ファイル名が使えません（空、記号だけ、または長すぎます）"),
+        }
+    }
     if let Some(local) = owned_already(&st, &job) {
         return err(StatusCode::CONFLICT, "owned", format!("既にライブラリにあります（id {local}）"));
+    }
+    if name_in_use(&st, &job.dest_dir, &job.file_name) {
+        return name_taken_response(&st, &job);
     }
     match st.downloads.enqueue(job) {
         Ok(j) => (StatusCode::CREATED, Json(json!({ "job": public(&j) }))).into_response(),
@@ -311,6 +346,9 @@ pub async fn enqueue_urls(State(st): State<Arc<AppState>>, Json(b): Json<UrlsBod
             let job = build_job(&st, &model, r.version_id, None, root, folder).map_err(|e| e.to_string())?;
             if let Some(local) = owned_already(&st, &job) {
                 return Err(format!("既にライブラリにあります（id {local}）"));
+            }
+            if name_in_use(&st, &job.dest_dir, &job.file_name) {
+                return Err(format!("同じ名前のファイルが、この保存先に既にあります: {}", job.file_name));
             }
             st.downloads.enqueue(job).map_err(|e| e.to_string())
         }
