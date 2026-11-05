@@ -40,7 +40,6 @@ async function doLogout() {
     <h4>パスワード</h4>
     <p class="hint">
       設定すると、ログインしないと一覧・プレビュー・編集などが使えなくなります（ログインは端末ごとに 180 日間有効）。
-      今は Tailscale 経由でしか開けないので必須ではありません。LAN のポートを開けるときは設定しておくと安心です。
     </p>
     <p>状態: <strong>{{ auth.enabled ? '設定済み' : '未設定（誰でも開ける）' }}</strong></p>
     <form class="pw-form" @submit.prevent="save()">
