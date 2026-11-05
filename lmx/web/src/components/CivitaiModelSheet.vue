@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ApiError, civitaiModel, enqueueDownload, type CivFile, type CivModel, type CivVersion } from '../api'
 import { checkFavorites, favs, toggleFavorite } from '../civFavorites'
-import { chosenName, splitFileName } from '../fileName'
+import { autoStem, chosenName, splitFileName } from '../fileName'
 import { closeOverlay, isOpen, openOverlay } from '../overlay'
 import { prefs } from '../prefs'
 import { normalizeFolder, rememberTarget, type Target } from '../targets'
@@ -109,6 +109,12 @@ async function confirm() {
   } finally {
     busy.value = false
   }
+}
+function useModelVersionName() {
+  if (!m.value || !picking.value) return
+  stem.value = autoStem(m.value.name, picking.value.version.name, m.value.lmx_type)
+  nameError.value = ''
+  suggested.value = ''
 }
 function useSuggested() {
   stem.value = suggested.value
@@ -230,6 +236,9 @@ const jobLabel: Record<string, string> = { queued: '待機中', running: 'ダウ
               <code class="ext">{{ ext }}</code>
             </span>
           </label>
+          <p class="actions name-actions">
+            <button type="button" class="chip" @click="useModelVersionName">モデル名_バージョン名にする</button>
+          </p>
           <p v-if="stem.trim() !== splitFileName(picking.file.name).stem" class="hint name-hint">
             Civitai の名前: <span class="mono">{{ picking.file.name }}</span>
             <button type="button" class="link" @click="stem = splitFileName(picking.file.name).stem; nameError = ''; suggested = ''">元に戻す</button>

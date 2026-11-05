@@ -14,3 +14,27 @@ export function chosenName(stem: string, original: string): string | undefined {
   if (!typed || typed === origStem) return undefined
   return typed + ext
 }
+
+const MAX_STEM = 150 // same cap as LoRA Manager's file name template
+
+function clean(text: string): string {
+  return text
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')
+    .replace(/_{2,}/g, '_')
+    .replace(/^[-_. ]+|[-_. ]+$/g, '') // a dangling `_` from a replaced `?` must not double up with the joiner
+}
+
+/**
+ * `<model name>_<version name>` as a file name stem, like LoRA Manager's `{model_name}_{version_name}`:
+ * characters files cannot contain become `_`, the stem is capped (the model name is cut first, so the
+ * version stays), and embeddings get `_` instead of spaces because their name is typed into prompts.
+ */
+export function autoStem(modelName: string, versionName: string, type?: string): string {
+  const version = clean(versionName)
+  let model = clean(modelName)
+  const room = MAX_STEM - (version ? version.length + 1 : 0)
+  if (model.length > room) model = model.slice(0, Math.max(room, 20))
+  let stem = [model, version].filter(Boolean).join('_')
+  if (type === 'embedding') stem = stem.replace(/\s+/g, '_')
+  return stem.replace(/^[-_. ]+|[-_. ]+$/g, '').slice(0, MAX_STEM)
+}
