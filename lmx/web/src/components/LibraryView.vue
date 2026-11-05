@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { fetchFacets, fetchFolders, fetchModels, fetchStatus, fetchUpdateStatus, type Facets, type FolderCount, type ModelSummary, type ModelType, type SortKey, type UpdateCounts } from '../api'
+import { fetchDetail, fetchFacets, fetchFolders, fetchModels, fetchStatus, fetchUpdateStatus, type Facets, type FolderCount, type ModelSummary, type ModelType, type SortKey, type UpdateCounts } from '../api'
+import { applyInForge } from '../embed'
 import { isOpen, openOverlay, closeOverlay } from '../overlay'
+import { toast } from '../toast'
 import ModelGrid from './ModelGrid.vue'
 import DetailSheet from './DetailSheet.vue'
 import BulkBar from './BulkBar.vue'
@@ -193,6 +195,16 @@ function clearFilters() {
   f.unlinked = false
   f.updates = false
 }
+/** Embedded in Forge: apply a model straight from the grid (embeddings need a positive/negative choice, so they open the sheet). */
+async function quickAdd(item: ModelSummary) {
+  if (item.type === 'embedding') return openDetail(item.id)
+  try {
+    applyInForge(await fetchDetail(item.id))
+  } catch {
+    toast('モデルの情報を読み込めませんでした', 3000)
+  }
+}
+
 function openDetail(id: number) {
   selectedId.value = id
   openOverlay('detail')
@@ -261,7 +273,7 @@ onMounted(() => {
     </header>
 
     <p v-if="error" class="err">読み込みに失敗しました: {{ error }}</p>
-    <ModelGrid :items="items" :total="total" :loading="loading" :selected="selecting ? selected : undefined" @need-more="loadMore" @open="onCard" @long="startSelect" />
+    <ModelGrid :items="items" :total="total" :loading="loading" :selected="selecting ? selected : undefined" @need-more="loadMore" @open="onCard" @long="startSelect" @add="quickAdd" />
     <BulkBar v-if="selecting" :ids="[...selected]" :type="f.type" @done="afterBulk" @select-all="selectAllLoaded" @clear="selected = new Set()" />
 
     <div v-if="isOpen('filters')" class="sheet-backdrop" @click.self="closeOverlay">

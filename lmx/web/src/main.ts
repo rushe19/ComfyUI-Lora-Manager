@@ -2,11 +2,13 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import { refreshAuth, watchAuth } from './auth'
 import { atRoot } from './base'
+import { initEmbed } from './embed'
 import { applyTheme, prefs } from './prefs'
 import './styles.css'
 
 applyTheme(prefs.theme)
 watchAuth()
+initEmbed()
 void refreshAuth()
 createApp(App).mount('#app')
 

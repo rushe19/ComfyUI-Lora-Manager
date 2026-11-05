@@ -2,12 +2,13 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ModelSummary } from '../api'
 import { withBase } from '../base'
+import { isEmbedded } from '../embed'
 import { prefs } from '../prefs'
 import LazyVideo from './LazyVideo.vue'
 import { computeGrid, isMature, visibleRows } from '../util'
 
 const props = defineProps<{ items: ModelSummary[]; total: number; loading: boolean; selected?: Set<number> }>()
-const emit = defineEmits<{ (e: 'need-more'): void; (e: 'open', id: number): void; (e: 'long', id: number): void }>()
+const emit = defineEmits<{ (e: 'need-more'): void; (e: 'open', id: number): void; (e: 'add', item: ModelSummary): void; (e: 'long', id: number): void }>()
 
 // Long press (500 ms without moving) selects instead of opening.
 let pressTimer: number | undefined
@@ -114,6 +115,7 @@ function style(index: number) {
           <span v-if="item.damaged" class="damaged">要修復</span>
           <span v-else-if="item.update" class="update-badge" title="Civitai に新しいバージョンがあります">NEW</span>
           <span v-else-if="!item.linked" class="unlinked" title="メタデータ未取得">?</span>
+          <span v-if="isEmbedded && !selected && item.type !== 'other'" class="add-btn" role="button" tabindex="0" :aria-label="`${item.name} を Forge に追加`" @pointerdown.stop @pointerup.stop @click.stop="emit('add', item)">＋</span>
           <span v-if="selected" class="check">{{ selected.has(item.id) ? '✓' : '' }}</span>
         </div>
         <div class="caption">{{ item.name }}</div>

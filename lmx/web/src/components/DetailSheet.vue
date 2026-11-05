@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { withBase } from '../base'
+import { applyInForge, forge, isEmbedded } from '../embed'
 import { computed, onMounted, ref, watch } from 'vue'
 import { ApiError, editModel, fetchDetail, ignoreUpdate, metadataJob, startMetadata, type ModelDetail } from '../api'
 import { trashWithUndo } from '../actions'
@@ -139,6 +140,12 @@ async function copy(text: string, label: string) {
             <button v-if="d.creator" class="chip" title="タップで作者名をコピー" @click="copy(d.creator, '作者名')">by {{ d.creator }}</button>
           </div>
 
+          <div v-if="isEmbedded && d.summary.type !== 'other'" class="actions forge-actions">
+            <button v-if="d.summary.type === 'lora'" class="primary" @click="applyInForge(d)">{{ forge.tab }} のプロンプトに追加{{ d.trained_words.length ? '（トリガーワード付き）' : '' }}</button>
+            <button v-else-if="d.summary.type === 'embedding'" class="primary" @click="applyInForge(d)">プロンプトに追加</button>
+            <button v-if="d.summary.type === 'embedding'" @click="applyInForge(d, { negative: true })">ネガティブに追加</button>
+            <button v-if="d.summary.type === 'checkpoint'" class="primary" @click="applyInForge(d)">この Checkpoint に切り替え</button>
+          </div>
           <div class="actions">
             <button v-if="d.lora_syntax" class="primary" @click="copy(d.lora_syntax, 'LoRA タグ')">{{ d.lora_syntax }} をコピー</button>
             <button v-if="d.trained_words.length" @click="copy(d.trained_words.join(', '), 'トリガーワード')">トリガーワードを全部コピー</button>
