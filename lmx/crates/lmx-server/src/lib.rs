@@ -22,7 +22,7 @@ use axum::{
     Json, Router,
 };
 use tower_http::{
-    compression::CompressionLayer,
+    compression::{predicate::{DefaultPredicate, NotForContentType, Predicate}, CompressionLayer},
     services::{ServeDir, ServeFile},
     set_header::SetResponseHeaderLayer,
 };
@@ -97,5 +97,31 @@ pub fn app(state: Arc<AppState>, web_dir: PathBuf) -> Router {
         .with_state(state);
 
     let shell = Router::new().fallback_service(static_files).layer(axum::middleware::from_fn(static_cache));
-    Router::new().nest("/api", api).merge(sw).merge(shell).layer(CompressionLayer::new())
+    Router::new().nest("/api", api).merge(sw).merge(shell).layer(compression())
+}
+
+/// gzip for text-like responses; images are skipped by the default predicate and already-compressed
+/// video/audio is skipped here (it only burns CPU).
+fn compression() -> CompressionLayer<impl Predicate> {
+    CompressionLayer::new().compress_when(DefaultPredicate::new().and(NotForContentType::const_new("video/")).and(NotForContentType::const_new("audio/")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{body::Body, http::Request, routing::get};
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn video_is_not_compressed_but_json_is() {
+        let big = "x".repeat(5000);
+        let app = Router::new()
+            .route("/v", get({ let b = big.clone(); move || async move { ([("content-type", "video/mp4")], b) } }))
+            .route("/j", get({ let b = big.clone(); move || async move { ([("content-type", "application/json")], b) } }))
+            .layer(compression());
+        for (uri, want) in [("/v", None), ("/j", Some("gzip"))] {
+            let res = app.clone().oneshot(Request::builder().uri(uri).header("accept-encoding", "gzip").body(Body::empty()).unwrap()).await.unwrap();
+            assert_eq!(res.headers().get("content-encoding").map(|v| v.to_str().unwrap()), want, "{uri}");
+        }
+    }
 }
